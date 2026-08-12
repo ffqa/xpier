@@ -1,6 +1,8 @@
 package xpier
 
 import (
+	_ "embed"
+
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +13,9 @@ import (
 	"xpier/internal/service"
 	"xpier/internal/store"
 )
+
+//go:embed adminer.php
+var adminerPHP []byte
 
 var dbServices = map[string]string{
 	"mysql":      "mysql",
@@ -158,9 +163,10 @@ func ensureAdminerSite() error {
 	}
 	index := filepath.Join(dir, "index.php")
 	if !store.FileExists(index) {
-		// Download the single-file Adminer (MIT).
-		if out, err := store.RunOut("curl", "-fsSL", "-o", index, "https://www.adminer.org/latest-mysql-en.php"); err != nil || !store.FileExists(index) {
-			return fmt.Errorf("download adminer: %v: %s", err, out)
+		// Adminer is embedded in the binary (Apache-2.0 / GPL-2, see
+		// internal/xpier/adminer.php header) so `xpier db` works offline.
+		if err := os.WriteFile(index, adminerPHP, 0o644); err != nil {
+			return fmt.Errorf("write adminer: %w", err)
 		}
 	}
 	sites, err := store.LoadSites()

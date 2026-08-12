@@ -3,6 +3,7 @@ package xpier
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"xpier/internal/store"
@@ -165,5 +166,38 @@ func TestAdminerURL(t *testing.T) {
 	s.TLD = "dev"
 	if got := adminerURL(s, ""); got != "http://database.dev/" {
 		t.Errorf("adminerURL custom tld = %q", got)
+	}
+}
+
+func TestEnsureAdminerSiteEmbedded(t *testing.T) {
+	homeTemp(t)
+	if err := ensureAdminerSite(); err != nil {
+		t.Fatal(err)
+	}
+	index := filepath.Join(store.XpierHome(), "adminer", "index.php")
+	if !store.FileExists(index) {
+		t.Fatal("adminer index.php not written from embedded copy")
+	}
+	data, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data) == 0 || !strings.Contains(string(data[:200]), "Adminer") {
+		t.Error("embedded adminer content missing")
+	}
+	// The reserved site is registered.
+	s, err := store.LoadSites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Sites["database"].Path != filepath.Join(store.XpierHome(), "adminer") {
+		t.Errorf("database site = %+v", s.Sites["database"])
+	}
+	// A user site named database is not overwritten.
+	reg := store.DefaultSites()
+	reg.Sites["database"] = store.Site{Path: "/user/db", Driver: "laravel"}
+	reg.Save()
+	if err := ensureAdminerSite(); err == nil {
+		t.Error("ensureAdminerSite should refuse to overwrite a user database site")
 	}
 }
