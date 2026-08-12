@@ -73,6 +73,8 @@ func Run(args []string) error {
 		return service.CmdPhpList(args[1:])
 	case "php:install":
 		return service.CmdPhpInstall(args[1:])
+	case "ext:install":
+		return service.CmdExtInstall(args[1:])
 	case "php:update":
 		return service.CmdPhpUpdate(args[1:])
 	case "link":

@@ -33,6 +33,7 @@ Sites & Projects:
 PHP Version Management:
   xpier use [8.3]                        show / set the global default PHP version
   xpier php:list / php:install <ver>     list installed PHP / install one via brew
+  xpier ext:install <swoole|xdebug|...> [--php 8.4]   install an extension for a PHP version
   xpier isolate <ver> / unisolate        pin/unpin current site's PHP version
   xpier isolated                         list PHP-isolated sites
   xpier which / which-php                current site's PHP version / binary path

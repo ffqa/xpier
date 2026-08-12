@@ -1,9 +1,11 @@
 package service
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"xpier/internal/nginx"
@@ -342,6 +344,35 @@ func CmdServicesCreate(args []string) error {
 		return fmt.Errorf("brew services start %s: %w", formula, err)
 	}
 	fmt.Printf("%s installed and started\n", formula)
+	return nil
+}
+
+var safeExtNameRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
+// CmdExtInstall installs a PHP extension for a PHP version via brew
+// (shivammathur/extensions tap, e.g. `xpier ext:install swoole --php 8.4`).
+func CmdExtInstall(args []string) error {
+	fs := flag.NewFlagSet("ext:install", flag.ExitOnError)
+	ver := fs.String("php", nginx.DefaultPhpVersion(), "php version")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: xpier ext:install <swoole|redis|xdebug|...> [--php 8.4]")
+	}
+	ext := fs.Arg(0)
+	if !safeExtNameRe.MatchString(ext) {
+		return fmt.Errorf("invalid extension name %q", ext)
+	}
+	// Tap may already exist; failure is not fatal (brew install would tap it too).
+	if err := store.RunOutLive("brew", "tap", "shivammathur/extensions"); err != nil {
+		fmt.Println("[warn] tap shivammathur/extensions: " + err.Error())
+	}
+	fmt.Printf("installing %s@%s via brew (progress below)...\n", ext, *ver)
+	if err := store.RunOutLive("brew", "install", "shivammathur/extensions/"+ext+"@"+*ver); err != nil {
+		return fmt.Errorf("brew install %s@%s failed: %w (run it manually to see the full log)", ext, *ver, err)
+	}
+	fmt.Printf("%s@%s installed (restart php-fpm to load it: `xpier service php-fpm-%s restart`)\n", ext, *ver, *ver)
 	return nil
 }
 
