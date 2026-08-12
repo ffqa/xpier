@@ -245,7 +245,7 @@ func cmdCompletion(args []string) error {
 	if len(args) > 0 {
 		shell = args[0]
 	}
-	cmds := []string{"init sync doctor status up down start restart log logs url install refresh link unlink park sites sites:up sites:down site:php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop mail:up mail:down mail xdebug tinker directory-listing forget isolate-node unisolate-node isolated-node node completion services services:stop services:start service ini"}
+	cmds := []string{"init sync doctor status up app:up down app:down start app:start restart app:restart log app:log logs app:logs url app:url install refresh link unlink park sites sites:up sites:down site:php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop mail:up mail:down mail xdebug tinker directory-listing forget isolate-node unisolate-node isolated-node node completion services services:stop services:start service ini"}
 	switch shell {
 	case "zsh":
 		fmt.Printf("#compdef xpier\n_xpier() { compadd %s }\ncompdef _xpier xpier\n", cmds)

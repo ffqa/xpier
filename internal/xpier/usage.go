@@ -7,20 +7,21 @@ import (
 func usage() {
 	fmt.Printf(`xpier %s - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
 
-Stack (multi-project orchestration, from dev.yaml / xpier.yaml apps):
-  xpier up                              start ALL apps (refuses if any already running)
-  xpier start <app> [--force]           start one app (--force = restart with cache clear)
-  xpier down                            stop all apps and clean nginx mappings
-  xpier restart <app> [--force]         kill + start one app (--force clears compiled caches)
+Apps (multi-project orchestration, from dev.yaml / xpier.yaml apps):
+  xpier up / app:up                    start ALL apps (refuses if any already running)
+  xpier start <app> / app:start [--force]   start one app (--force = restart with cache clear)
+  xpier down / app:down                stop all apps and clean nginx mappings
+  xpier restart <app> / app:restart [--force]   kill + start one app (--force clears compiled caches)
   xpier status                          pins, lock, and app stack table
-  xpier log <app> [-f] / xpier logs     one app log / all apps together
-  xpier url [app]                       show app URLs
+  xpier log <app> / app:log [-f]       one app log / all apps together (logs / app:logs)
+  xpier url [app] / app:url            show app URLs
 
-store.Sites:
+Sites:
   xpier link [name] [--php 8.2]         link current directory as a site (name.test)
   xpier park <dir> [...]                serve every subdirectory of a directory as a site
   xpier unlink [name]                   remove a site
   xpier sites / links / parked / isolated   list sites, links, parked dirs, isolated sites
+  xpier sites:up / sites:down           start/stop php-fpm for linked sites
   xpier site:php <site> [version]       show or set a site's PHP version
   xpier isolate <ver> / unisolate       pin/unpin current site's PHP version
   xpier open [site] / edit [site]       open site in browser / IDE
@@ -31,7 +32,6 @@ store.Sites:
 Runtime services:
   xpier install                         one-time sudo setup: nginx + dnsmasq launchd daemons, certs, sudoers
   xpier services / service <svc> <act>  service overview / per-service control (nginx, dnsmasq, php-fpm)
-  xpier sites:up / sites:down           start/stop php-fpm for linked sites
 
 Environment:
   xpier init [--php 8.2] [--runtime hyperf] [.]  pin versions in ~/.xpier/projects (or '.' in repo)

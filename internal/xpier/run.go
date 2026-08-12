@@ -29,19 +29,19 @@ func Run(args []string) error {
 		return cmdDoctor(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
-	case "up":
+	case "up", "app:up":
 		return apps.CmdUp(args[1:])
-	case "down":
+	case "down", "app:down":
 		return apps.CmdDown(args[1:])
-	case "start":
+	case "start", "app:start":
 		return apps.CmdStart(args[1:])
-	case "restart":
+	case "restart", "app:restart":
 		return apps.CmdRestart(args[1:])
-	case "log":
+	case "log", "app:log":
 		return apps.CmdLog(args[1:])
-	case "logs":
+	case "logs", "app:logs":
 		return apps.CmdLogsAll(args[1:])
-	case "url":
+	case "url", "app:url":
 		return apps.CmdURL(args[1:])
 	case "install":
 		return service.CmdInstall(args[1:])
