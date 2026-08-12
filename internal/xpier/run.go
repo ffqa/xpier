@@ -29,6 +29,8 @@ func Run(args []string) error {
 		return cmdDoctor(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
+	case "app":
+		return cmdNamespace(args[1:])
 	case "app:init":
 		return apps.CmdInit(args[1:])
 	case "up", "app:up":

@@ -161,3 +161,13 @@ func TestRunAppInitDispatch(t *testing.T) {
 		t.Error("app:init did not create dev.yaml in cwd")
 	}
 }
+
+func TestNamespaceGroupApp(t *testing.T) {
+	homeTemp(t)
+	if err := Run([]string{"app"}); err != nil {
+		t.Errorf("Run(app) = %v", err)
+	}
+	if err := Run([]string{"app", "bogus"}); err == nil {
+		t.Error("Run(app bogus) should error")
+	}
+}
