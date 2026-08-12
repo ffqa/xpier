@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	"xpier/internal/store"
@@ -337,8 +338,8 @@ func TestWriteAppNginxConfPrefersStatePort(t *testing.T) {
 
 func TestProcGroupOf(t *testing.T) {
 	homeTemp(t)
-	if got := procGroupOf(os.Getpid()); got != os.Getpgrp() {
-		t.Errorf("procGroupOf = %d, want %d", got, os.Getpgrp())
+	if got := procGroupOf(os.Getpid()); got != syscall.Getpgrp() {
+		t.Errorf("procGroupOf = %d, want %d", got, syscall.Getpgrp())
 	}
 	if got := procGroupOf(999999); got != 0 {
 		t.Errorf("procGroupOf dead pid = %d, want 0", got)
