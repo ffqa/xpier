@@ -250,10 +250,7 @@ func CmdSites(args []string) error {
 	if b, _ := store.PortBusy("80"); b {
 		nginxUp = true
 	}
-	dnsUp := false
-	if b, _ := store.UDPBusy("53"); b {
-		dnsUp = true
-	}
+	dnsUp := service.DnsmasqRunning()
 	fmt.Printf("nginx: %s | dnsmasq: %s | %d site(s)\n", store.UpDown(nginxUp), store.UpDown(dnsUp), len(sites.Sites))
 	names := make([]string, 0, len(sites.Sites))
 	for name := range sites.Sites {

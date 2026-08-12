@@ -1,11 +1,13 @@
 package sites
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
 
@@ -322,5 +324,45 @@ func TestCmdPark(t *testing.T) {
 	}
 	if err := CmdPark([]string{filepath.Join(park, "missing")}); err == nil {
 		t.Error("park missing dir should error")
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	fn()
+	w.Close()
+	os.Stdout = old
+	data, _ := io.ReadAll(r)
+	return string(data)
+}
+
+func dnsmasqStatus(s string) string {
+	i := strings.Index(s, "dnsmasq:")
+	if i < 0 {
+		return ""
+	}
+	fields := strings.Fields(s[i+len("dnsmasq:"):])
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
+// TestDnsmasqStatusConsistent guards against the sites/services views of the
+// same daemon drifting apart (they used lsof vs pgrep detection before).
+func TestDnsmasqStatusConsistent(t *testing.T) {
+	homeTemp(t)
+	sitesOut := captureStdout(t, func() { CmdSites(nil) })
+	svcOut := captureStdout(t, func() { service.XpierServiceStatus() })
+	s1 := dnsmasqStatus(sitesOut)
+	s2 := dnsmasqStatus(svcOut)
+	if s1 == "" || s2 == "" {
+		t.Fatalf("could not parse dnsmasq status: sites=%q services=%q", sitesOut, svcOut)
+	}
+	if s1 != s2 {
+		t.Errorf("dnsmasq status inconsistent: sites=%q services=%q", s1, s2)
 	}
 }
