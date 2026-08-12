@@ -235,3 +235,27 @@ func TestCmdServicesStartWithLinkedSitesNoFpm(t *testing.T) {
 		t.Errorf("CmdServicesStart warn path = %v", err)
 	}
 }
+
+func TestFpmDownLiveButNotOurs(t *testing.T) {
+	homeTemp(t)
+	ver := "8.2"
+	// A live PID (the test process) whose cmdline does not match the fpm
+	// marker: FpmDown must NOT kill it, only drop the stale state.
+	st := &FpmState{Version: ver, PID: os.Getpid()}
+	if err := os.MkdirAll(filepath.Dir(FpmStatePath(ver)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(st)
+	if err := os.WriteFile(FpmStatePath(ver), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := FpmDown(ver); err != nil {
+		t.Fatalf("FpmDown = %v", err)
+	}
+	if !store.PidAlive(os.Getpid()) {
+		t.Fatal("FpmDown killed the test process!")
+	}
+	if store.FileExists(FpmStatePath(ver)) {
+		t.Error("stale fpm state should be removed")
+	}
+}

@@ -273,7 +273,7 @@ func appUp(ns string, name string, app store.App) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start %s: %w", name, err)
 	}
-	s := &store.AppState{Name: name, PID: cmd.Process.Pid, Log: logPath, Port: app.Port, Ports: known, Domain: app.Domain}
+	s := &store.AppState{Name: name, PID: cmd.Process.Pid, Cmd: app.Cmd, Log: logPath, Port: app.Port, Ports: known, Domain: app.Domain}
 	if err := store.SaveAppState(s, ns); err != nil {
 		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 		return err
@@ -311,13 +311,16 @@ func appDown(ns string, name string, app store.App) {
 	if err != nil {
 		return
 	}
-	store.KillGroup(s.PID, syscall.SIGTERM)
 	all := appPorts(app, s)
-	for i := 0; i < 50; i++ {
-		if !store.PidAlive(s.PID) && !anyAppPortBusy(all) {
-			break
+	// Guard with a cmdline marker: never kill a PID recycled after reboot.
+	if store.ProcAlive(s.PID, s.Cmd) {
+		store.KillGroup(s.PID, syscall.SIGTERM)
+		for i := 0; i < 50; i++ {
+			if !store.PidAlive(s.PID) && !anyAppPortBusy(all) {
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
 		}
-		time.Sleep(100 * time.Millisecond)
 	}
 	killAppPortHolders(all)
 	os.Remove(store.AppStatePath(ns, name))

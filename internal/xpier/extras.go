@@ -95,7 +95,7 @@ func cmdMailDown(args []string) error {
 	if err != nil {
 		return fmt.Errorf("mailpit not running")
 	}
-	if store.PidAlive(st.PID) {
+	if store.ProcAlive(st.PID, "mailpit") {
 		store.KillGroup(st.PID, 15)
 	}
 	os.Remove(mailStatePath())

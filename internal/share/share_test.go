@@ -179,3 +179,20 @@ func TestCmdShareAlreadySharing(t *testing.T) {
 		t.Errorf("CmdShare already sharing = %v", err)
 	}
 }
+
+func TestCmdShareStopLiveButNotOurs(t *testing.T) {
+	homeTemp(t)
+	st := &ShareState{Site: "ghost", PID: os.Getpid(), URL: "https://ghost.trycloudflare.com", Target: "http://127.0.0.1:80"}
+	if err := SaveShareState(st); err != nil {
+		t.Fatal(err)
+	}
+	if err := CmdShareStop([]string{"ghost"}); err != nil {
+		t.Fatalf("CmdShareStop = %v", err)
+	}
+	if !store.PidAlive(os.Getpid()) {
+		t.Fatal("CmdShareStop killed the test process!")
+	}
+	if store.FileExists(ShareStatePath("ghost")) {
+		t.Error("stale share state should be removed")
+	}
+}

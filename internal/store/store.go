@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -93,6 +94,7 @@ type ServiceLock struct {
 type AppState struct {
 	Name   string   `json:"name"`
 	PID    int      `json:"pid"`
+	Cmd    string   `json:"cmd,omitempty"`
 	Log    string   `json:"log"`
 	Port   string   `json:"port"`
 	Ports  []string `json:"ports,omitempty"`
@@ -132,6 +134,23 @@ func PidAlive(pid int) bool {
 	}
 	err := syscall.Kill(pid, 0)
 	return err == nil || err == syscall.EPERM
+}
+
+// ProcAlive reports whether pid is alive AND its command line contains marker
+// (when marker is non-empty). Kills must be guarded with a marker so a PID
+// recycled after a reboot can never take down an unrelated process.
+func ProcAlive(pid int, marker string) bool {
+	if !PidAlive(pid) {
+		return false
+	}
+	if marker == "" {
+		return true
+	}
+	out, err := RunOut("ps", "-o", "command=", "-p", strconv.Itoa(pid))
+	if err != nil {
+		return false
+	}
+	return strings.Contains(out, marker)
 }
 
 func KillGroup(pid int, sig syscall.Signal) error {

@@ -300,3 +300,20 @@ func TestWriteAppNginxConfPorts(t *testing.T) {
 		t.Error("config without domain should not be written")
 	}
 }
+
+func TestAppDownLiveButNotOurs(t *testing.T) {
+	homeTemp(t)
+	// State pointing at the test process with a marker that does not match:
+	// appDown must not kill us, just drop the stale state.
+	s := &store.AppState{Name: "web", PID: os.Getpid(), Cmd: "__zz_not_ours__"}
+	if err := store.SaveAppState(s, "ns"); err != nil {
+		t.Fatal(err)
+	}
+	appDown("ns", "web", store.App{})
+	if !store.PidAlive(os.Getpid()) {
+		t.Fatal("appDown killed the test process!")
+	}
+	if _, err := store.LoadAppState("ns", "web"); err == nil {
+		t.Error("app state should be removed")
+	}
+}

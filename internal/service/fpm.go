@@ -142,8 +142,11 @@ func FpmDown(ver string) error {
 	if err != nil {
 		return fmt.Errorf("php-fpm %s not running", ver)
 	}
-	if !store.PidAlive(st.PID) {
+	// Guard with a cmdline marker: a PID recycled after reboot must not be
+	// killed just because the state file still mentions it.
+	if !store.ProcAlive(st.PID, "-y "+FpmConfPath(ver)) {
 		os.Remove(FpmStatePath(ver))
+		fmt.Printf("php-fpm %s state was stale (pid %d not ours), removed\n", ver, st.PID)
 		return nil
 	}
 	store.KillGroup(st.PID, syscall.SIGTERM)

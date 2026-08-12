@@ -142,7 +142,7 @@ func stopShareByKey(key string) {
 	if err != nil {
 		return
 	}
-	if store.PidAlive(st.PID) {
+	if store.ProcAlive(st.PID, "--url "+st.Target) {
 		store.KillGroup(st.PID, syscall.SIGTERM)
 		time.Sleep(300 * time.Millisecond)
 		if store.PidAlive(st.PID) {
@@ -304,7 +304,7 @@ func CmdShareStop(args []string) error {
 		if err != nil {
 			continue
 		}
-		if store.PidAlive(st.PID) {
+		if store.ProcAlive(st.PID, "--url "+st.Target) {
 			store.KillGroup(st.PID, syscall.SIGTERM)
 			time.Sleep(300 * time.Millisecond)
 			if store.PidAlive(st.PID) {

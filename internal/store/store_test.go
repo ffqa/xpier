@@ -414,3 +414,20 @@ func TestPaintWord(t *testing.T) {
 		t.Errorf("Paint with NO_COLOR = %q, want plain", got)
 	}
 }
+
+func TestProcAlive(t *testing.T) {
+	homeTemp(t)
+	// Our own process is alive; a marker found in our cmdline matches.
+	if !ProcAlive(os.Getpid(), "") {
+		t.Error("ProcAlive empty marker should fall back to PidAlive")
+	}
+	if !ProcAlive(os.Getpid(), "store.test") {
+		t.Error("ProcAlive should match our test binary cmdline")
+	}
+	if ProcAlive(os.Getpid(), "__zz_no_such_marker__") {
+		t.Error("ProcAlive should reject a marker absent from the cmdline")
+	}
+	if ProcAlive(999999, "anything") {
+		t.Error("ProcAlive should be false for a dead pid")
+	}
+}
