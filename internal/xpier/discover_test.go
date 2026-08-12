@@ -179,10 +179,14 @@ func TestNewCommandsDispatch(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(old)
 	// Safe, read-only or temp-scoped commands must dispatch without error.
-	for _, cmd := range []string{"services:available", "services:versions", "init:fresh", "paths", "which", "which-php", "php:list"} {
+	for _, cmd := range []string{"services:available", "services:versions", "init:fresh", "paths", "which", "php:list"} {
 		if err := Run(strings.Split(cmd, " ")); err != nil {
 			t.Errorf("Run(%q) = %v", cmd, err)
 		}
+	}
+	// which-php requires a linked site; it must fail cleanly here.
+	if err := Run([]string{"which-php"}); err == nil {
+		t.Error("Run(which-php) in an unlinked dir should error")
 	}
 	// init:fresh recreates the manifest in the temp project dir.
 	cwd, _ := os.Getwd()
