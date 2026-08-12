@@ -437,3 +437,10 @@ func TestCmdLogServiceMissing(t *testing.T) {
 		t.Error("log nginx with no nginx log should error")
 	}
 }
+
+func TestWriteAppNginxConfDomainWithoutPort(t *testing.T) {
+	homeTemp(t)
+	if err := writeAppNginxConf("ns", "web", store.App{Domain: "web.test"}); err == nil {
+		t.Error("domain without a port should error, not silently skip")
+	}
+}

@@ -231,8 +231,11 @@ func writeAppNginxConf(ns, name string, app store.App) error {
 			port = st.Ports[0]
 		}
 	}
-	if app.Domain == "" || port == "" {
+	if app.Domain == "" {
 		return nil
+	}
+	if port == "" {
+		return fmt.Errorf("cannot proxy %s: no port declared and none detected from the log; add port/ports to the app", app.Domain)
 	}
 	cert, certKey := nginx.CertPaths(nginx.CurrentTLD())
 	conf := fmt.Sprintf(`server {
@@ -325,7 +328,7 @@ func RefreshNginxConfs() error {
 				continue
 			}
 			if err := writeAppNginxConf(ns.Name(), name, store.App{Domain: st.Domain, Port: st.Port, Ports: st.Ports}); err != nil {
-				return err
+				fmt.Printf("[warn] %s: %v\n", name, err)
 			}
 		}
 	}
@@ -618,8 +621,14 @@ func CmdUp(args []string) error {
 		}
 	}
 	if appConfigHasDomain(cfg) {
+		var confErrs []string
 		for n, app := range cfg.Apps {
-			writeAppNginxConf(ns, n, app)
+			if err := writeAppNginxConf(ns, n, app); err != nil {
+				confErrs = append(confErrs, fmt.Sprintf("%s: %v", n, err))
+			}
+		}
+		if len(confErrs) > 0 {
+			return fmt.Errorf("部分应用域名代理无法生成:\n  %s", strings.Join(confErrs, "\n  "))
 		}
 		nginx.NginxReload()
 	}
@@ -837,7 +846,9 @@ func CmdStart(args []string) error {
 	if err := appUp(ns, name, app); err != nil {
 		return err
 	}
-	writeAppNginxConf(ns, name, app)
+	if err := writeAppNginxConf(ns, name, app); err != nil {
+		return err
+	}
 	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
