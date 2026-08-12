@@ -469,3 +469,40 @@ func TestUpGuidanceByProjectType(t *testing.T) {
 		t.Errorf("static guidance = %v", err)
 	}
 }
+
+func TestAutoLinkApp(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "public", "index.php"), "<?php")
+	app := store.App{Dir: dir, Domain: "blog.test"}
+	if err := autoLinkApp("ns", "blog", app, "/unused"); err != nil {
+		t.Fatalf("autoLinkApp = %v", err)
+	}
+	reg, err := store.LoadSites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	site := reg.Sites["blog"]
+	if site.Domain != "blog.test" || site.Driver != "laravel" {
+		t.Errorf("site = %+v", site)
+	}
+	if site.Secure == nil || *site.Secure {
+		t.Error("app-declared site should default to http-only")
+	}
+	if store.SiteDomain(reg, "blog") != "blog.test" {
+		t.Errorf("SiteDomain override = %q", store.SiteDomain(reg, "blog"))
+	}
+	// secure: true -> https (Secure nil)
+	app.Secure = true
+	if err := autoLinkApp("ns", "blog2", app, "/unused"); err != nil {
+		t.Fatal(err)
+	}
+	reg, _ = store.LoadSites()
+	if reg.Sites["blog2"].Secure != nil {
+		t.Error("secure: true should enable https (Secure nil)")
+	}
+	// domain-only without domain errors
+	if err := autoLinkApp("ns", "x", store.App{Dir: dir}, "/unused"); err == nil {
+		t.Error("missing domain should error")
+	}
+}

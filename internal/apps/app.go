@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 	"xpier/internal/nginx"
+	"xpier/internal/service"
+	"xpier/internal/sites"
 	"xpier/internal/store"
 )
 
@@ -591,6 +593,63 @@ func appConfigHasDomain(cfg *store.AppConfig) bool {
 
 // --- commands ---
 
+// autoLinkApp registers a web (fpm/static) app as a site: entries with a
+// domain but no cmd are served by nginx+php-fpm like `xpier link`.
+func autoLinkApp(ns, name string, app store.App, cwd string) error {
+	dir := app.Dir
+	if dir == "" {
+		dir = cwd
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+		return fmt.Errorf("%s: dir %s not found", name, abs)
+	}
+	if app.Domain == "" {
+		return fmt.Errorf("%s: domain-only entries need a domain: field", name)
+	}
+	if !store.SafeSiteNameRe.MatchString(app.Domain) {
+		return fmt.Errorf("%s: invalid domain %q", name, app.Domain)
+	}
+	reg, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	if existing, ok := reg.Sites[name]; ok && existing.Path != abs {
+		return fmt.Errorf("site %s already linked to %s (unlink it first)", name, existing.Path)
+	}
+	httpOnly := false
+	site := store.Site{Path: abs, Driver: sites.DetectDriver(abs), PHP: app.PHP, Domain: app.Domain}
+	if app.Secure {
+		site.Secure = nil // https
+	} else {
+		site.Secure = &httpOnly // default http for app-declared sites
+	}
+	reg.Sites[name] = site
+	if err := reg.Save(); err != nil {
+		return err
+	}
+	if err := nginx.WriteSiteNginxConfig(reg, name); err != nil {
+		return err
+	}
+	if err := nginx.NginxReload(); err != nil {
+		fmt.Printf("[warn] nginx reload failed: %v\n", err)
+	}
+	if store.IsTTY(os.Stdout) {
+		phpVer := app.PHP
+		if phpVer == "" {
+			phpVer = nginx.DefaultPhpVersion()
+		}
+		if err := service.FpmUp(phpVer); err != nil {
+			fmt.Printf("[warn] php-fpm %s: %v\n", phpVer, err)
+		}
+	}
+	fmt.Printf("  %s site up: http://%s/\n", name, app.Domain)
+	return nil
+}
+
 // upGuidance explains how a project type is meant to run when no apps are
 // defined, instead of a bare "no apps defined" error.
 func upGuidance() error {
@@ -637,6 +696,13 @@ func CmdUp(args []string) error {
 			ns, strings.Join(conflicts, "\n  "))
 	}
 	for n, app := range cfg.Apps {
+		if app.Cmd == "" {
+			// Web (fpm/static) entry: `up` links it like xpier link.
+			if err := autoLinkApp(ns, n, app, cwd); err != nil {
+				fmt.Printf("  [warn] %v\n", err)
+			}
+			continue
+		}
 		if err := appUp(ns, n, app); err != nil {
 			fmt.Printf("  [warn] %v\n", err)
 		}
@@ -645,6 +711,9 @@ func CmdUp(args []string) error {
 		var failed []string
 		var confErrs []string
 		for n, app := range cfg.Apps {
+			if app.Cmd == "" {
+				continue // web entries already wrote their site config
+			}
 			if err := writeAppNginxConf(ns, n, app); err != nil {
 				failed = append(failed, n)
 				confErrs = append(confErrs, fmt.Sprintf("%s: %v", n, err))
@@ -1260,6 +1329,14 @@ const appInitTemplate = `# xpier 应用编排配置(dev.yaml)
 namespace: devstack          # 可选:进程隔离命名空间(默认 default;不同项目用不同 namespace 可同时跑)
 
 apps:
+  # 示例 0:标准 Laravel / 静态站点 —— 无需 cmd 和端口!
+  # up 会自动把它注册成站点(相当于 xpier link),nginx+php-fpm 直接服务
+  blog:
+    dir: /path/to/laravel-blog   # 可选:默认当前目录
+    domain: blog.test            # 必填:访问域名
+    secure: true                 # 可选:开启 https(默认 http)
+    php: "8.4"                   # 可选:固定 PHP 版本
+
   # 示例 1:PHP 常驻服务(Hyperf/Swoole)
   php-server:
     dir: /path/to/php-server  # 必填:工作目录(命令在此执行)

@@ -46,6 +46,8 @@ type App struct {
 	Node       string            `yaml:"node,omitempty"`
 	PHP        string            `yaml:"php,omitempty"`
 	Extensions []string          `yaml:"extensions,omitempty"`
+	// Secure enables https for a web app (domain-only entry); default http.
+	Secure bool `yaml:"secure,omitempty"`
 }
 
 type AppConfig struct {
@@ -65,6 +67,9 @@ type Site struct {
 	PHP    string `json:"php,omitempty"`
 	Node   string `json:"node,omitempty"`
 	Driver string `json:"driver"`
+	// Domain overrides the default <name>.<tld> (used by apps entries with
+	// an explicit domain).
+	Domain string `json:"domain,omitempty"`
 	// Secure is nil by default (https on). Set to false via `xpier unsecure`
 	// to serve a site over plain http only.
 	Secure *bool `json:"secure,omitempty"`
@@ -403,7 +408,14 @@ func CurrentUser() (*user.User, error) {
 	return user.Current()
 }
 
-func SiteDomain(s *Sites, name string) string { return name + "." + s.TLD }
+func SiteDomain(s *Sites, name string) string {
+	if s != nil {
+		if site, ok := s.Sites[name]; ok && site.Domain != "" {
+			return site.Domain
+		}
+	}
+	return name + "." + s.TLD
+}
 
 func SiteRoot(site Site) string {
 	switch site.Driver {
