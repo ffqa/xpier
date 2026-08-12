@@ -3,6 +3,7 @@ package xpier
 import (
 	"fmt"
 	"os"
+	"xpier/internal/store"
 )
 
 func cmdStatus(args []string) error {
@@ -10,8 +11,8 @@ func cmdStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	manifestPath, lockPath := resolvePaths(cwd)
-	m, mErr := loadManifest(manifestPath)
+	manifestPath, lockPath := store.ResolvePaths(cwd)
+	m, mErr := store.LoadManifest(manifestPath)
 	if mErr != nil {
 		fmt.Printf("manifest: none (auto-detect mode; create pins with `xpier init --php 8.2`)\n")
 	} else {
@@ -24,7 +25,7 @@ func cmdStatus(args []string) error {
 			fmt.Printf("  svc %s\n", svc)
 		}
 	}
-	lock, err := loadLock(lockPath)
+	lock, err := store.LoadLock(lockPath)
 	if err != nil {
 		fmt.Printf("lock %s: absent (run `xpier sync --apply`)\n", lockPath)
 	} else {
@@ -41,7 +42,7 @@ func cmdStatus(args []string) error {
 			fmt.Printf("  svc %s: running=%v\n", s.Name, s.Running)
 		}
 	}
-	// App stack table (dev.yaml / xpier.yaml apps).
+	// store.App stack table (dev.yaml / xpier.yaml apps).
 	if _, _, err := loadAppConfig(); err == nil {
 		cmdAppStatus(nil)
 	}

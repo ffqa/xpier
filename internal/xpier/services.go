@@ -5,24 +5,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"xpier/internal/store"
 )
 
 func dnsmasqRunning() bool {
 	// lsof sometimes fails to report dnsmasq's UDP 53 socket on macOS;
 	// detect the process instead.
-	out, err := runOut("pgrep", "-f", dnsmasqBin())
+	out, err := store.RunOut("pgrep", "-f", dnsmasqBin())
 	return err == nil && strings.TrimSpace(out) != ""
 }
 
 func xpierServiceStatus() {
 	nginxUp := false
-	if b, _ := portBusy("80"); b {
+	if b, _ := store.PortBusy("80"); b {
 		nginxUp = true
 	}
 	dnsUp := dnsmasqRunning()
 	fmt.Printf("nginx:   %s\n", upDown(nginxUp))
 	fmt.Printf("dnsmasq: %s\n", upDown(dnsUp))
-	entries, _ := os.ReadDir(filepath.Join(xpierHome(), "servers"))
+	entries, _ := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	fpm := []string{}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "fpm-") && strings.HasSuffix(e.Name(), ".json") {
@@ -38,12 +39,12 @@ func xpierServiceStatus() {
 		fmt.Printf("php-fpm: up (%s)\n", strings.Join(fpm, ", "))
 	}
 	// Shares (cloudflared tunnels)
-	entries, _ = os.ReadDir(filepath.Join(xpierHome(), "servers"))
+	entries, _ = os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	shares := []string{}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "share-") && strings.HasSuffix(e.Name(), ".json") {
 			site := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "share-"), ".json")
-			if st, err := loadShareState(site); err == nil && pidAlive(st.PID) {
+			if st, err := loadShareState(site); err == nil && store.PidAlive(st.PID) {
 				shares = append(shares, fmt.Sprintf("%s(%s)", site, st.URL))
 			}
 		}
@@ -61,7 +62,7 @@ func cmdServices(args []string) error {
 }
 
 func stopDaemon(label string) error {
-	out, err := runOut("launchctl", "bootout", "system/"+label)
+	out, err := store.RunOut("launchctl", "bootout", "system/"+label)
 	if err != nil {
 		return fmt.Errorf("bootout %s: %v: %s", label, err, out)
 	}
@@ -101,7 +102,7 @@ func showConfig(path string) error {
 	fmt.Printf("config: %s\n", path)
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		if fileExists("/usr/local/bin/code") {
+		if store.FileExists("/usr/local/bin/code") {
 			editor = "/usr/local/bin/code"
 		}
 	}
@@ -134,12 +135,12 @@ func cmdService(args []string) error {
 	case "nginx":
 		switch action {
 		case "status":
-			b, _ := portBusy("80")
+			b, _ := store.PortBusy("80")
 			fmt.Printf("nginx: %s\n", upDown(b))
 		case "config":
 			return showConfig(filepath.Join(nginxHome(), "nginx.conf"))
 		case "configtest":
-			out, err := runOut("sudo", "-n", nginxBin(), "-t", "-c", filepath.Join(nginxHome(), "nginx.conf"))
+			out, err := store.RunOut("sudo", "-n", nginxBin(), "-t", "-c", filepath.Join(nginxHome(), "nginx.conf"))
 			if err != nil {
 				return fmt.Errorf("nginx configtest failed: %v: %s", err, out)
 			}
@@ -176,7 +177,7 @@ func cmdService(args []string) error {
 		case "config":
 			return showConfig(dnsmasqConfPath())
 		case "configtest":
-			out, err := runOut(dnsmasqBin(), "--test", "-C", dnsmasqConfPath())
+			out, err := store.RunOut(dnsmasqBin(), "--test", "-C", dnsmasqConfPath())
 			if err != nil {
 				return fmt.Errorf("dnsmasq configtest failed: %v: %s", err, out)
 			}
@@ -224,7 +225,7 @@ func cmdService(args []string) error {
 }
 
 func cmdServicesStop(args []string) error {
-	entries, _ := os.ReadDir(filepath.Join(xpierHome(), "servers"))
+	entries, _ := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "fpm-") && strings.HasSuffix(e.Name(), ".json") {
 			ver := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "fpm-"), ".json")

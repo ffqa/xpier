@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"xpier/internal/store"
 )
 
 // brewAsUser runs brew as the real user: Homebrew refuses to run as root.
@@ -39,7 +40,7 @@ func cmdInstall(args []string) error {
 	}
 	fmt.Println("port checks passed")
 	for _, d := range []string{"nginx", "nginx/conf.d", "dnsmasq", "fpm", "run", "certs", "logs"} {
-		if err := os.MkdirAll(filepath.Join(xpierHome(), d), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(store.XpierHome(), d), 0o755); err != nil {
 			return err
 		}
 	}
@@ -51,7 +52,7 @@ func cmdInstall(args []string) error {
 		return err
 	}
 	// Regenerate site configs so they reference current paths.
-	if sites, err := loadSites(); err == nil {
+	if sites, err := store.LoadSites(); err == nil {
 		writeAllSiteConfigs(sites)
 	}
 	if err := writeDnsmasqConfig("test"); err != nil {
@@ -105,14 +106,14 @@ func checkPortConflicts() error {
 			b, _ := udpBusy(c.port)
 			busy = b
 			if b {
-				out, _ := runOut("lsof", "-nP", "-iUDP:"+c.port)
+				out, _ := store.RunOut("lsof", "-nP", "-iUDP:"+c.port)
 				holder = firstNonHeaderLine(out)
 			}
 		} else {
-			b, _ := portBusy(c.port)
+			b, _ := store.PortBusy(c.port)
 			busy = b
 			if b {
-				out, _ := runOut("lsof", "-nP", "-iTCP:"+c.port, "-sTCP:LISTEN")
+				out, _ := store.RunOut("lsof", "-nP", "-iTCP:"+c.port, "-sTCP:LISTEN")
 				holder = firstNonHeaderLine(out)
 			}
 		}
@@ -135,7 +136,7 @@ func isOurBinary(holder string) bool {
 	if len(fields) < 2 {
 		return false
 	}
-	cmdline, _ := runOut("ps", "-o", "command=", "-p", fields[1])
+	cmdline, _ := store.RunOut("ps", "-o", "command=", "-p", fields[1])
 	if cmdline == "" {
 		return false
 	}
@@ -175,7 +176,7 @@ func chownHerdyHomeToUser() error {
 	if err != nil {
 		return err
 	}
-	return filepath.Walk(xpierHome(), func(path string, info os.FileInfo, err error) error {
+	return filepath.Walk(store.XpierHome(), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"xpier/internal/store"
 )
 
 type ShareState struct {
@@ -22,7 +23,7 @@ type ShareState struct {
 }
 
 func shareStatePath(site string) string {
-	return filepath.Join(xpierHome(), "servers", "share-"+site+".json")
+	return filepath.Join(store.XpierHome(), "servers", "share-"+site+".json")
 }
 
 func loadShareState(site string) (*ShareState, error) {
@@ -49,7 +50,7 @@ func saveShareState(st *ShareState) error {
 }
 
 func cloudflaredBin() string {
-	if p := filepath.Join(brewPrefix(), "bin", "cloudflared"); fileExists(p) {
+	if p := filepath.Join(store.BrewPrefix(), "bin", "cloudflared"); store.FileExists(p) {
 		return p
 	}
 	return "/usr/local/bin/cloudflared"
@@ -75,7 +76,7 @@ func waitTunnelRegistered(logPath string, timeout time.Duration) bool {
 // Cloudflare edge is unreliable). Returns the HTTP code or "000".
 func verifyPublicURL(url string) string {
 	for i := 0; i < 2; i++ {
-		code, err := runOut("curl", "-4", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "8", url)
+		code, err := store.RunOut("curl", "-4", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "8", url)
 		if err == nil && code != "" && code != "000" {
 			return code
 		}
@@ -89,10 +90,10 @@ func verifyPublicURL(url string) string {
 // (for self-signed dev certs like vite's basic-ssl).
 func startTunnel(key, target string, insecure bool) (string, error) {
 	bin := cloudflaredBin()
-	if err := ensureBrewPackage(bin, "cloudflared", "cloudflared"); err != nil {
+	if err := store.EnsureBrewPackage(bin, "cloudflared", "cloudflared"); err != nil {
 		return "", err
 	}
-	logPath := filepath.Join(xpierHome(), "logs", "share-"+key+".log")
+	logPath := filepath.Join(store.XpierHome(), "logs", "share-"+key+".log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
 		return "", err
@@ -120,11 +121,11 @@ func startTunnel(key, target string, insecure bool) (string, error) {
 		time.Sleep(300 * time.Millisecond)
 	}
 	if tunnelURL == "" {
-		killGroup(cmd.Process.Pid, syscall.SIGKILL)
+		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 		return "", fmt.Errorf("cloudflared did not produce a tunnel URL; see %s", logPath)
 	}
 	if !waitTunnelRegistered(logPath, 20*time.Second) {
-		killGroup(cmd.Process.Pid, syscall.SIGKILL)
+		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 		return "", fmt.Errorf("cloudflared did not register; see %s", logPath)
 	}
 	st := &ShareState{Site: key, PID: cmd.Process.Pid, URL: tunnelURL, Target: target, Log: logPath}
@@ -140,11 +141,11 @@ func stopShareByKey(key string) {
 	if err != nil {
 		return
 	}
-	if pidAlive(st.PID) {
-		killGroup(st.PID, syscall.SIGTERM)
+	if store.PidAlive(st.PID) {
+		store.KillGroup(st.PID, syscall.SIGTERM)
 		time.Sleep(300 * time.Millisecond)
-		if pidAlive(st.PID) {
-			killGroup(st.PID, syscall.SIGKILL)
+		if store.PidAlive(st.PID) {
+			store.KillGroup(st.PID, syscall.SIGKILL)
 		}
 	}
 	os.Remove(shareStatePath(key))
@@ -183,7 +184,7 @@ func cmdShare(args []string) error {
 	key := siteName
 	url := "http://127.0.0.1:80"
 	insecure := false
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -216,7 +217,7 @@ func cmdShare(args []string) error {
 	if key == "" {
 		key = "default"
 	}
-	if st, err := loadShareState(key); err == nil && pidAlive(st.PID) {
+	if st, err := loadShareState(key); err == nil && store.PidAlive(st.PID) {
 		fmt.Printf("already sharing: %s (pid %d)\n", st.URL, st.PID)
 		return nil
 	}
@@ -254,7 +255,7 @@ func cmdShare(args []string) error {
 }
 
 func cmdShares(args []string) error {
-	entries, err := os.ReadDir(filepath.Join(xpierHome(), "servers"))
+	entries, err := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	if err != nil {
 		fmt.Println("no shares")
 		return nil
@@ -271,7 +272,7 @@ func cmdShares(args []string) error {
 		}
 		found = true
 		state := "down"
-		if pidAlive(st.PID) {
+		if store.PidAlive(st.PID) {
 			state = "up"
 		}
 		fmt.Printf("  %-12s %-6s %s (pid %d, %s)\n", site, state, st.URL, st.PID, st.Target)
@@ -287,7 +288,7 @@ func cmdShareStop(args []string) error {
 	if len(args) > 0 {
 		sites = append(sites, args[0])
 	} else {
-		entries, _ := os.ReadDir(filepath.Join(xpierHome(), "servers"))
+		entries, _ := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 		for _, e := range entries {
 			if strings.HasPrefix(e.Name(), "share-") && strings.HasSuffix(e.Name(), ".json") {
 				sites = append(sites, strings.TrimSuffix(strings.TrimPrefix(e.Name(), "share-"), ".json"))
@@ -302,16 +303,16 @@ func cmdShareStop(args []string) error {
 		if err != nil {
 			continue
 		}
-		if pidAlive(st.PID) {
-			killGroup(st.PID, syscall.SIGTERM)
+		if store.PidAlive(st.PID) {
+			store.KillGroup(st.PID, syscall.SIGTERM)
 			time.Sleep(300 * time.Millisecond)
-			if pidAlive(st.PID) {
-				killGroup(st.PID, syscall.SIGKILL)
+			if store.PidAlive(st.PID) {
+				store.KillGroup(st.PID, syscall.SIGKILL)
 			}
 		}
 		os.Remove(shareStatePath(site))
 		// Remove the tunnel host from the site's nginx config.
-		if s, err := loadSites(); err == nil {
+		if s, err := store.LoadSites(); err == nil {
 			if _, ok := s.Sites[site]; ok {
 				writeSiteNginxConfig(s, site)
 				nginxReload()

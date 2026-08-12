@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"xpier/internal/store"
 )
 
 var (
@@ -34,8 +35,8 @@ func cmdSync(args []string) error {
 	if err != nil {
 		return err
 	}
-	manifestPath, lockPath := resolvePaths(cwd)
-	m, err := loadManifest(manifestPath)
+	manifestPath, lockPath := store.ResolvePaths(cwd)
+	m, err := store.LoadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("load %s: %w (create one with `xpier init --php 8.2`)", manifestPath, err)
 	}
@@ -64,14 +65,14 @@ func cmdSync(args []string) error {
 	return writeLock(m, lockPath)
 }
 
-func plan(m *Manifest) []planItem {
+func plan(m *store.Manifest) []planItem {
 	var items []planItem
 	phpOK := false
 	bin := phpBinFor(m.PHP)
 	if v := phpVersion(bin); v != "" {
 		items = append(items, planItem{"php", m.PHP, "ok", bin + " (" + v + ")", ""})
 		phpOK = true
-	} else if out, err := runOut("which", "php"); err == nil && out != "" && strings.HasPrefix(phpVersion(out), m.PHP+".") {
+	} else if out, err := store.RunOut("which", "php"); err == nil && out != "" && strings.HasPrefix(phpVersion(out), m.PHP+".") {
 		items = append(items, planItem{"php", m.PHP, "ok", "using " + out + " (" + phpVersion(out) + ")", ""})
 		phpOK = true
 	} else {
@@ -108,7 +109,7 @@ func plan(m *Manifest) []planItem {
 	}
 	for _, svc := range m.Services {
 		it := planItem{kind: "svc", name: svc}
-		if out, err := runOut("brew", "list", "--versions", svc); err != nil {
+		if out, err := store.RunOut("brew", "list", "--versions", svc); err != nil {
 			it.state = "missing"
 			it.detail = "not installed via brew"
 			it.command = "brew install " + svc
@@ -136,7 +137,7 @@ func applyPlan(items []planItem) error {
 	return nil
 }
 
-func writeLock(m *Manifest, lockPath string) error {
+func writeLock(m *store.Manifest, lockPath string) error {
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		return err
 	}
@@ -144,19 +145,19 @@ func writeLock(m *Manifest, lockPath string) error {
 	ver := phpVersion(bin)
 	path := bin
 	if ver == "" {
-		if out, err := runOut("which", "php"); err == nil && out != "" {
+		if out, err := store.RunOut("which", "php"); err == nil && out != "" {
 			if v := phpVersion(out); v != "" {
 				bin, ver, path = out, v, out
 			}
 		}
 	}
-	lock := Lock{
+	lock := store.Lock{
 		SchemaVersion: 1,
 		GeneratedAt:   time.Now().Format(time.RFC3339),
-		PHP:           PhpLock{Version: ver, Path: path},
+		PHP:           store.PhpLock{Version: ver, Path: path},
 	}
 	for _, ext := range sortedKeys(m.Extensions) {
-		lock.Extensions = append(lock.Extensions, ExtLock{
+		lock.Extensions = append(lock.Extensions, store.ExtLock{
 			Name:       ext,
 			Constraint: m.Extensions[ext],
 			Installed:  extVersion(bin, ext),
@@ -164,9 +165,9 @@ func writeLock(m *Manifest, lockPath string) error {
 		})
 	}
 	for _, svc := range m.Services {
-		lock.Services = append(lock.Services, ServiceLock{Name: svc, Running: serviceRunning(svc)})
+		lock.Services = append(lock.Services, store.ServiceLock{Name: svc, Running: serviceRunning(svc)})
 	}
-	if err := lock.save(lockPath); err != nil {
+	if err := lock.Save(lockPath); err != nil {
 		return err
 	}
 	fmt.Printf("wrote %s\n", lockPath)

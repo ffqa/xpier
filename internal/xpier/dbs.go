@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"xpier/internal/store"
 )
 
 var dbServices = map[string]string{
@@ -63,7 +64,7 @@ func cmdDBStart(args []string) error {
 		return err
 	}
 	if out, err := brewAsUser("list", "--versions", formula); err != nil || !strings.Contains(out, formula) {
-		ok, err := confirmYesNo(fmt.Sprintf("%s 未安装（brew install %s），是否现在安装？", formula, formula))
+		ok, err := store.ConfirmYesNo(fmt.Sprintf("%s 未安装（brew install %s），是否现在安装？", formula, formula))
 		if err != nil {
 			return err
 		}
@@ -124,7 +125,7 @@ func cmdDBCreate(args []string) error {
 		}
 		fmt.Printf("created database %s (mysql)\n", name)
 	case "postgres", "pgsql", "postgresql":
-		bin := filepath.Join(brewPrefix(), "opt", "postgresql@16", "bin", "createdb")
+		bin := filepath.Join(store.BrewPrefix(), "opt", "postgresql@16", "bin", "createdb")
 		out, err := exec.Command(bin, name).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("createdb: %v: %s", err, out)
@@ -138,24 +139,24 @@ func cmdDBCreate(args []string) error {
 
 // adminerSite registers a `database.test` site serving Adminer.
 func ensureAdminerSite() error {
-	dir := filepath.Join(xpierHome(), "adminer")
+	dir := filepath.Join(store.XpierHome(), "adminer")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	index := filepath.Join(dir, "index.php")
-	if !fileExists(index) {
+	if !store.FileExists(index) {
 		// Download the single-file Adminer (MIT).
-		if out, err := runOut("curl", "-fsSL", "-o", index, "https://www.adminer.org/latest-mysql-en.php"); err != nil || !fileExists(index) {
+		if out, err := store.RunOut("curl", "-fsSL", "-o", index, "https://www.adminer.org/latest-mysql-en.php"); err != nil || !store.FileExists(index) {
 			return fmt.Errorf("download adminer: %v: %s", err, out)
 		}
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
 	if _, ok := sites.Sites["database"]; !ok {
-		sites.Sites["database"] = Site{Path: dir, Driver: "php"}
-		if err := sites.save(); err != nil {
+		sites.Sites["database"] = store.Site{Path: dir, Driver: "php"}
+		if err := sites.Save(); err != nil {
 			return err
 		}
 	}

@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"xpier/internal/store"
 )
 
 // cmdTinker runs Laravel Tinker with the site's PHP.
 func cmdTinker(args []string) error {
 	siteName, passthrough := extractSiteFlag(args)
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -27,9 +28,9 @@ func cmdTinker(args []string) error {
 	}
 	// Auto-detect the app type: Hyperf (bin/hyperf.php) or Laravel (artisan).
 	var script string
-	if fileExists(filepath.Join(site.Path, "bin", "hyperf.php")) {
+	if store.FileExists(filepath.Join(site.Path, "bin", "hyperf.php")) {
 		script = "bin/hyperf.php"
-	} else if fileExists(filepath.Join(site.Path, "artisan")) {
+	} else if store.FileExists(filepath.Join(site.Path, "artisan")) {
 		script = "artisan"
 	} else {
 		return fmt.Errorf("no tinker entry found in %s (neither bin/hyperf.php nor artisan)", site.Path)
@@ -92,7 +93,7 @@ func cmdForget(args []string) error {
 	if err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -111,7 +112,7 @@ func cmdForget(args []string) error {
 		}
 	}
 	sites.Parked = filtered
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	if err := nginxReload(); err != nil {
@@ -132,7 +133,7 @@ func cmdIsolateNode(args []string) error {
 	if fs.NArg() < 1 {
 		return fmt.Errorf("usage: xpier isolate-node <version> [--site x]")
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -142,7 +143,7 @@ func cmdIsolateNode(args []string) error {
 	}
 	site.Node = fs.Arg(0)
 	sites.Sites[name] = site
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	fmt.Printf("%s node -> %s\n", siteDomain(sites, name), site.Node)
@@ -155,7 +156,7 @@ func cmdUnisolateNode(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,7 @@ func cmdUnisolateNode(args []string) error {
 	}
 	site.Node = ""
 	sites.Sites[name] = site
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	fmt.Printf("%s node unisolated\n", siteDomain(sites, name))
@@ -173,7 +174,7 @@ func cmdUnisolateNode(args []string) error {
 }
 
 func cmdIsolatedNode(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -196,7 +197,7 @@ func cmdIsolatedNode(args []string) error {
 
 func cmdNode(args []string) error {
 	siteName, passthrough := extractSiteFlag(args)
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -228,8 +229,8 @@ func cmdIni(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	ini := filepath.Join(brewPrefix(), "etc", "php", *ver, "php.ini")
-	if !fileExists(ini) {
+	ini := filepath.Join(store.BrewPrefix(), "etc", "php", *ver, "php.ini")
+	if !store.FileExists(ini) {
 		return fmt.Errorf("php.ini not found at %s", ini)
 	}
 	return showConfig(ini)

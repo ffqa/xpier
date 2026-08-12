@@ -8,20 +8,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"xpier/internal/store"
 )
 
 // resolveSite returns the site for the current directory (by basename), or an
 // explicit --site name.
-func resolveSite(sites *Sites, siteName string) (string, Site, error) {
+func resolveSite(sites *store.Sites, siteName string) (string, store.Site, error) {
 	if siteName != "" {
 		if s, ok := sites.Sites[siteName]; ok {
 			return siteName, s, nil
 		}
-		return "", Site{}, fmt.Errorf("site %s is not linked", siteName)
+		return "", store.Site{}, fmt.Errorf("site %s is not linked", siteName)
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", Site{}, err
+		return "", store.Site{}, err
 	}
 	name := filepath.Base(cwd)
 	if s, ok := sites.Sites[name]; ok {
@@ -37,17 +38,17 @@ func resolveSite(sites *Sites, siteName string) (string, Site, error) {
 			}
 		}
 	}
-	return "", Site{}, fmt.Errorf("no site for current directory; link it with `xpier link` or pass --site")
+	return "", store.Site{}, fmt.Errorf("no site for current directory; link it with `xpier link` or pass --site")
 }
 
 // sitePHPBin resolves the php binary for a site (pinned version, manifest, or default).
-func sitePHPBin(site Site) (string, string, error) {
+func sitePHPBin(site store.Site) (string, string, error) {
 	ver := site.PHP
 	if ver == "" {
 		ver = defaultPhpVersion()
 	}
-	bin := filepath.Join(brewPrefix(), "opt", "php@"+ver, "bin", "php")
-	if !fileExists(bin) {
+	bin := filepath.Join(store.BrewPrefix(), "opt", "php@"+ver, "bin", "php")
+	if !store.FileExists(bin) {
 		return "", "", fmt.Errorf("php@%s not found at %s (run `brew install shivammathur/php/php@%s`)", ver, bin, ver)
 	}
 	return bin, ver, nil
@@ -66,7 +67,7 @@ func cmdIsolate(args []string) error {
 	if !safePhpRe.MatchString(ver) {
 		return fmt.Errorf("invalid php version %q", ver)
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -76,7 +77,7 @@ func cmdIsolate(args []string) error {
 	}
 	site.PHP = ver
 	sites.Sites[name] = site
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	if err := writeSiteNginxConfig(sites, name); err != nil {
@@ -95,7 +96,7 @@ func cmdUnisolate(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func cmdUnisolate(args []string) error {
 	}
 	site.PHP = ""
 	sites.Sites[name] = site
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	if err := writeSiteNginxConfig(sites, name); err != nil {
@@ -119,7 +120,7 @@ func cmdUnisolate(args []string) error {
 }
 
 func cmdIsolated(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -161,7 +162,7 @@ func extractSiteFlag(args []string) (site string, rest []string) {
 // runSitePHP proxies a command to the site's PHP binary (like `herd php`).
 func runSitePHP(args []string, extra []string) error {
 	siteName, passthrough := extractSiteFlag(args)
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -189,7 +190,7 @@ func cmdSitePHPProxy(args []string) error { return runSitePHP(args, nil) }
 
 func cmdSiteComposer(args []string) error {
 	siteName, passthrough := extractSiteFlag(args)
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -229,7 +230,7 @@ func cmdOpen(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -247,7 +248,7 @@ func cmdEdit(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -262,9 +263,9 @@ func cmdEdit(args []string) error {
 	}
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
-		if fileExists("/usr/local/bin/code") {
+		if store.FileExists("/usr/local/bin/code") {
 			editor = "/usr/local/bin/code"
-		} else if fileExists("/Applications/Visual Studio Code.app") {
+		} else if store.FileExists("/Applications/Visual Studio Code.app") {
 			editor = "open -a \"Visual Studio Code\""
 		} else {
 			return fmt.Errorf("no editor found; set $EDITOR")
@@ -278,7 +279,7 @@ func cmdSiteInformation(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -308,7 +309,7 @@ func cmdTLD(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -318,7 +319,7 @@ func cmdTLD(args []string) error {
 			return fmt.Errorf("invalid tld %q", tld)
 		}
 		sites.TLD = tld
-		if err := sites.save(); err != nil {
+		if err := sites.Save(); err != nil {
 			return err
 		}
 		if err := writeDnsmasqConfig(tld); err != nil {
@@ -338,20 +339,20 @@ func cmdLoopback(args []string) error {
 	}
 	if fs.NArg() > 0 {
 		lb := fs.Arg(0)
-		sites, err := loadSites()
+		sites, err := store.LoadSites()
 		if err != nil {
 			return err
 		}
 		_ = lb
 		fmt.Println("loopback is fixed at 127.0.0.1 in xpier")
-		return sites.save()
+		return sites.Save()
 	}
 	fmt.Println("127.0.0.1")
 	return nil
 }
 
 func cmdLinks(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -367,7 +368,7 @@ func cmdLinks(args []string) error {
 }
 
 func cmdParked(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}

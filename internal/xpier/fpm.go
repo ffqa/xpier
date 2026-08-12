@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"xpier/internal/store"
 )
 
 type FpmState struct {
@@ -19,19 +20,19 @@ type FpmState struct {
 }
 
 func fpmStatePath(ver string) string {
-	return filepath.Join(xpierHome(), "servers", "fpm-"+ver+".json")
+	return filepath.Join(store.XpierHome(), "servers", "fpm-"+ver+".json")
 }
 
 func fpmSockPath(ver string) string {
-	return filepath.Join(xpierHome(), "run", "php-fpm-"+ver+".sock")
+	return filepath.Join(store.XpierHome(), "run", "php-fpm-"+ver+".sock")
 }
 
 func fpmConfPath(ver string) string {
-	return filepath.Join(xpierHome(), "fpm", "php-fpm-"+ver+".conf")
+	return filepath.Join(store.XpierHome(), "fpm", "php-fpm-"+ver+".conf")
 }
 
 func fpmBinFor(ver string) string {
-	return filepath.Join(brewPrefix(), "opt", "php@"+ver, "sbin", "php-fpm")
+	return filepath.Join(store.BrewPrefix(), "opt", "php@"+ver, "sbin", "php-fpm")
 }
 
 func loadFpmState(ver string) (*FpmState, error) {
@@ -48,7 +49,7 @@ func loadFpmState(ver string) (*FpmState, error) {
 
 func fpmRunning(ver string) bool {
 	if st, err := loadFpmState(ver); err == nil {
-		return pidAlive(st.PID)
+		return store.PidAlive(st.PID)
 	}
 	return false
 }
@@ -77,7 +78,7 @@ pm.start_servers = 2
 pm.min_spare_servers = 1
 pm.max_spare_servers = 4
 clear_env = no
-`, xpierHome(), ver, xpierHome(), ver, user.Username, user.Gid, sock, user.Username, user.Gid)
+`, store.XpierHome(), ver, store.XpierHome(), ver, user.Username, user.Gid, sock, user.Username, user.Gid)
 	if err := os.MkdirAll(filepath.Dir(fpmConfPath(ver)), 0o755); err != nil {
 		return err
 	}
@@ -90,13 +91,13 @@ func fpmUp(ver string) error {
 		return nil
 	}
 	bin := fpmBinFor(ver)
-	if !fileExists(bin) {
+	if !store.FileExists(bin) {
 		return fmt.Errorf("php-fpm for %s not found at %s (run `brew install shivammathur/php/php@%s`)", ver, bin, ver)
 	}
 	if err := writeFpmConf(ver); err != nil {
 		return err
 	}
-	logPath := filepath.Join(xpierHome(), "logs", "php-fpm-"+ver+".log")
+	logPath := filepath.Join(store.XpierHome(), "logs", "php-fpm-"+ver+".log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
@@ -125,11 +126,11 @@ func fpmUp(ver string) error {
 	}
 	// Wait for the unix socket to appear.
 	for i := 0; i < 20; i++ {
-		if fileExists(fpmSockPath(ver)) {
+		if store.FileExists(fpmSockPath(ver)) {
 			fmt.Printf("php-fpm %s up (pid %d, %s)\n", ver, cmd.Process.Pid, fpmSockPath(ver))
 			return nil
 		}
-		if !pidAlive(cmd.Process.Pid) {
+		if !store.PidAlive(cmd.Process.Pid) {
 			return fmt.Errorf("php-fpm %s exited during startup; see %s", ver, logPath)
 		}
 		time.Sleep(200 * time.Millisecond)
@@ -142,38 +143,38 @@ func fpmDown(ver string) error {
 	if err != nil {
 		return fmt.Errorf("php-fpm %s not running", ver)
 	}
-	if !pidAlive(st.PID) {
+	if !store.PidAlive(st.PID) {
 		os.Remove(fpmStatePath(ver))
 		return nil
 	}
-	killGroup(st.PID, syscall.SIGTERM)
+	store.KillGroup(st.PID, syscall.SIGTERM)
 	for i := 0; i < 50; i++ {
-		if !pidAlive(st.PID) {
+		if !store.PidAlive(st.PID) {
 			os.Remove(fpmStatePath(ver))
 			fmt.Printf("php-fpm %s stopped\n", ver)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	killGroup(st.PID, syscall.SIGKILL)
+	store.KillGroup(st.PID, syscall.SIGKILL)
 	os.Remove(fpmStatePath(ver))
 	fmt.Printf("php-fpm %s stopped (forced)\n", ver)
 	return nil
 }
 
 func cmdSitesUp(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
 	syncParked(sites)
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	if len(sites.Sites) == 0 {
 		return fmt.Errorf("no linked sites; link one with `xpier link` or `xpier park <dir>` first")
 	}
-	if b, _ := portBusy("80"); !b {
+	if b, _ := store.PortBusy("80"); !b {
 		fmt.Println("[warn] nginx is not listening on port 80; run `sudo xpier install` first")
 	}
 	versions := map[string]bool{}
@@ -193,7 +194,7 @@ func cmdSitesUp(args []string) error {
 }
 
 func cmdSitesDown(args []string) error {
-	entries, err := os.ReadDir(filepath.Join(xpierHome(), "servers"))
+	entries, err := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	if err != nil {
 		return fmt.Errorf("no php-fpm state found")
 	}

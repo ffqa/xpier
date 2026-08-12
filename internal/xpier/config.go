@@ -5,46 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"gopkg.in/yaml.v3"
+	"xpier/internal/store"
 )
-
-// Manifest is the project-declared environment. It is optional: xpier
-// auto-detects runtime and PHP, and the manifest only exists to pin or
-// declare things that cannot be detected. Empty fields are not stored.
-type Manifest struct {
-	PHP        string            `yaml:"php,omitempty"`
-	Runtime    string            `yaml:"runtime,omitempty"`
-	Extensions map[string]string `yaml:"extensions,omitempty"`
-	Services   []string          `yaml:"services,omitempty"`
-	Apps       map[string]App    `yaml:"apps,omitempty"`
-}
-
-func DefaultManifest() *Manifest {
-	return &Manifest{
-		Runtime: "fpm",
-	}
-}
-
-func (m *Manifest) save(path string) error {
-	data, err := yaml.Marshal(m)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0o644)
-}
-
-func loadManifest(path string) (*Manifest, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var m Manifest
-	if err := yaml.Unmarshal(data, &m); err != nil {
-		return nil, err
-	}
-	return &m, nil
-}
 
 func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
@@ -70,24 +32,24 @@ func cmdInit(args []string) error {
 	}
 	var manifestPath string
 	if *local {
-		manifestPath = filepath.Join(cwd, manifestName)
+		manifestPath = filepath.Join(cwd, store.ManifestName)
 	} else {
-		manifestPath, _ = projectPaths(cwd)
-		if err := ensureProjectDir(cwd); err != nil {
+		manifestPath, _ = store.ProjectPaths(cwd)
+		if err := store.EnsureProjectDir(cwd); err != nil {
 			return err
 		}
 	}
 	if _, err := os.Stat(manifestPath); err == nil {
 		return fmt.Errorf("%s already exists", manifestPath)
 	}
-	m := DefaultManifest()
+	m := store.DefaultManifest()
 	if *php != "" {
 		m.PHP = *php
 	}
 	if *runtime != "" {
 		m.Runtime = *runtime
 	}
-	if err := m.save(manifestPath); err != nil {
+	if err := m.Save(manifestPath); err != nil {
 		return err
 	}
 	fmt.Printf("created %s (php %s, runtime %s)\n", manifestPath, m.PHP, m.Runtime)

@@ -1,6 +1,8 @@
 package xpier
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func usage() {
 	fmt.Println(`xpier - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
@@ -14,7 +16,7 @@ Stack (multi-project orchestration, from dev.yaml / xpier.yaml apps):
   xpier log <app> [-f] / xpier logs     one app log / all apps together
   xpier url [app]                       show app URLs
 
-Sites:
+store.Sites:
   xpier link [name] [--php 8.2]         link current directory as a site (name.test)
   xpier park <dir> [...]                serve every subdirectory of a directory as a site
   xpier unlink [name]                   remove a site

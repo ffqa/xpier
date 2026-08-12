@@ -1,12 +1,11 @@
 package xpier
 
 import (
-	"os"
-	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"xpier/internal/store"
 )
 
 var (
@@ -14,16 +13,8 @@ var (
 	extVerRe  = regexp.MustCompile(`Version\s*=>\s*(\S+)`)
 )
 
-func brewPrefix() string {
-	out, err := exec.Command("brew", "--prefix").Output()
-	if err != nil {
-		return "/usr/local"
-	}
-	return strings.TrimSpace(string(out))
-}
-
 func phpBinFor(version string) string {
-	return brewPrefix() + "/opt/php@" + version + "/bin/php"
+	return store.BrewPrefix() + "/opt/php@" + version + "/bin/php"
 }
 
 func phpCandidates(version string) []string {
@@ -33,18 +24,8 @@ func phpCandidates(version string) []string {
 	}
 }
 
-func runOut(name string, args ...string) (string, error) {
-	out, err := exec.Command(name, args...).Output()
-	return strings.TrimSpace(string(out)), err
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
 func phpVersion(bin string) string {
-	out, err := runOut(bin, "-v")
+	out, err := store.RunOut(bin, "-v")
 	if err != nil {
 		return ""
 	}
@@ -55,7 +36,7 @@ func phpVersion(bin string) string {
 }
 
 func extVersion(bin, ext string) string {
-	out, err := runOut(bin, "--ri", ext)
+	out, err := store.RunOut(bin, "--ri", ext)
 	if err != nil {
 		return ""
 	}
@@ -66,7 +47,7 @@ func extVersion(bin, ext string) string {
 }
 
 func extLoaded(bin, ext string) bool {
-	_, err := runOut(bin, "--ri", ext)
+	_, err := store.RunOut(bin, "--ri", ext)
 	return err == nil
 }
 
@@ -131,7 +112,7 @@ func constraintOk(constraint, installed string) bool {
 }
 
 func serviceRunning(name string) bool {
-	out, err := runOut("brew", "services", "list")
+	out, err := store.RunOut("brew", "services", "list")
 	if err != nil {
 		return false
 	}

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"xpier/internal/store"
 )
 
 func cmdDoctor(args []string) error {
@@ -12,9 +13,9 @@ func cmdDoctor(args []string) error {
 	if err != nil {
 		return err
 	}
-	manifestPath, lockPath := resolvePaths(cwd)
-	m, mErr := loadManifest(manifestPath)
-	lock, lockErr := loadLock(lockPath)
+	manifestPath, lockPath := store.ResolvePaths(cwd)
+	m, mErr := store.LoadManifest(manifestPath)
+	lock, lockErr := store.LoadLock(lockPath)
 	failed := false
 
 	// The manifest is optional: without it, doctor checks what can be
@@ -30,18 +31,18 @@ func cmdDoctor(args []string) error {
 	}
 
 	bin := ""
-	if lockErr == nil && lock.PHP.Path != "" && fileExists(lock.PHP.Path) {
+	if lockErr == nil && lock.PHP.Path != "" && store.FileExists(lock.PHP.Path) {
 		bin = lock.PHP.Path
 	} else if hasManifest && m.PHP != "" {
 		for _, c := range phpCandidates(m.PHP) {
-			if fileExists(c) {
+			if store.FileExists(c) {
 				bin = c
 				break
 			}
 		}
 	}
 	if bin == "" {
-		if out, err := runOut("which", "php"); err == nil && out != "" {
+		if out, err := store.RunOut("which", "php"); err == nil && out != "" {
 			bin = out
 		}
 	}
@@ -105,7 +106,7 @@ func cmdDoctor(args []string) error {
 	}
 
 	// composer platform check
-	if fileExists("composer.lock") {
+	if store.FileExists("composer.lock") {
 		if err := checkComposerPlatformReqs(); err != nil {
 			failed = true
 		}

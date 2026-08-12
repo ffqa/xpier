@@ -6,10 +6,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"xpier/internal/store"
 )
 
 func nginxHome() string {
-	return filepath.Join(xpierHome(), "nginx")
+	return filepath.Join(store.XpierHome(), "nginx")
 }
 
 func nginxConfDir() string {
@@ -17,7 +18,7 @@ func nginxConfDir() string {
 }
 
 func nginxBin() string {
-	if p := filepath.Join(brewPrefix(), "bin", "nginx"); fileExists(p) {
+	if p := filepath.Join(store.BrewPrefix(), "bin", "nginx"); store.FileExists(p) {
 		return p
 	}
 	return "/usr/local/bin/nginx"
@@ -28,7 +29,7 @@ func siteConfPath(name string) string {
 }
 
 func fastcgiParamsPath() string {
-	return filepath.Join(brewPrefix(), "etc", "nginx", "fastcgi_params")
+	return filepath.Join(store.BrewPrefix(), "etc", "nginx", "fastcgi_params")
 }
 
 func writeNginxMainConfig() error {
@@ -52,14 +53,14 @@ http {
     server_names_hash_bucket_size 256;
     include %s/*.conf;
 }
-`, user.Username, nginxHome(), nginxHome(), filepath.Join(brewPrefix(), "etc", "nginx", "mime.types"), nginxConfDir())
+`, user.Username, nginxHome(), nginxHome(), filepath.Join(store.BrewPrefix(), "etc", "nginx", "mime.types"), nginxConfDir())
 	return os.WriteFile(filepath.Join(nginxHome(), "nginx.conf"), []byte(conf), 0o644)
 }
 
 // defaultPhpVersion picks the highest brew php@X installed, falling back to 8.2.
 func defaultPhpVersion() string {
 	best := ""
-	entries, err := os.ReadDir(filepath.Join(brewPrefix(), "opt"))
+	entries, err := os.ReadDir(filepath.Join(store.BrewPrefix(), "opt"))
 	if err != nil {
 		return "8.2"
 	}
@@ -112,14 +113,14 @@ func compareVersionStrings(a, b string) int {
 	return 0
 }
 
-func writeSiteNginxConfig(sites *Sites, name string) error {
+func writeSiteNginxConfig(sites *store.Sites, name string) error {
 	return writeSiteNginxConfigWithNames(sites, name, nil)
 }
 
 // writeSiteNginxConfigWithNames writes a site's nginx config. extra names are
 // additional server_name values (used by `xpier share` so the tunnel host
 // resolves to the site).
-func writeSiteNginxConfigWithNames(sites *Sites, name string, extra []string) error {
+func writeSiteNginxConfigWithNames(sites *store.Sites, name string, extra []string) error {
 	site, ok := sites.Sites[name]
 	if !ok {
 		return fmt.Errorf("site %s not linked", name)
@@ -130,12 +131,12 @@ func writeSiteNginxConfigWithNames(sites *Sites, name string, extra []string) er
 	}
 	domain := siteDomain(sites, name)
 	root := siteRoot(site)
-	cert := filepath.Join(xpierHome(), "certs", "wildcard."+sites.TLD+".pem")
-	certKey := filepath.Join(xpierHome(), "certs", "wildcard."+sites.TLD+"-key.pem")
+	cert := filepath.Join(store.XpierHome(), "certs", "wildcard."+sites.TLD+".pem")
+	certKey := filepath.Join(store.XpierHome(), "certs", "wildcard."+sites.TLD+"-key.pem")
 	// Prefer a per-domain cert (signed via `sudo xpier secure <domain>`) when
 	// one exists; the *.test wildcard does not cover multi-label hosts like
 	// img.test28.test.
-	if dc, dk := domainCertPaths(domain); fileExists(dc) && fileExists(dk) {
+	if dc, dk := domainCertPaths(domain); store.FileExists(dc) && store.FileExists(dk) {
 		cert, certKey = dc, dk
 	}
 
@@ -167,7 +168,7 @@ func writeSiteNginxConfigWithNames(sites *Sites, name string, extra []string) er
 		conf.WriteString("        proxy_set_header Connection \"upgrade\";\n")
 		conf.WriteString("    }\n")
 	} else if site.Driver == "laravel" || site.Driver == "php" {
-		sock := filepath.Join(xpierHome(), "run", fmt.Sprintf("php-fpm-%s.sock", php))
+		sock := filepath.Join(store.XpierHome(), "run", fmt.Sprintf("php-fpm-%s.sock", php))
 		conf.WriteString("    location / {\n")
 		conf.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 		conf.WriteString("    }\n")
@@ -200,8 +201,8 @@ func removeSiteNginxConfig(name string) error {
 // writeDefaultSiteConfig returns 404 for any host that is not a registered
 // site, so an unlinked domain can never fall through to another site.
 func writeDefaultSiteConfig() error {
-	cert := filepath.Join(xpierHome(), "certs", "wildcard.test.pem")
-	certKey := filepath.Join(xpierHome(), "certs", "wildcard.test-key.pem")
+	cert := filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem")
+	certKey := filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem")
 	conf := fmt.Sprintf(`server {
     listen 80 default_server;
     listen 443 ssl default_server;
@@ -226,7 +227,7 @@ func nginxReload() error {
 	return nil
 }
 
-func loadManifestFrom(dir string) (*Manifest, error) {
-	manifestPath, _ := resolvePaths(dir)
-	return loadManifest(manifestPath)
+func loadManifestFrom(dir string) (*store.Manifest, error) {
+	manifestPath, _ := store.ResolvePaths(dir)
+	return store.LoadManifest(manifestPath)
 }

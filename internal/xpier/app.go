@@ -2,7 +2,6 @@ package xpier
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -14,11 +13,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"gopkg.in/yaml.v3"
+	"xpier/internal/store"
 )
-
-func yamlUnmarshal(data []byte, v any) error { return yaml.Unmarshal(data, v) }
 
 // parseForceFlag extracts a --force flag from anywhere in args (Go's flag
 // package stops at the first positional arg, silently ignoring a trailing
@@ -36,59 +32,24 @@ func parseForceFlag(args []string) (bool, []string) {
 	return force, rest
 }
 
-// portBusy reports whether something is listening on a TCP port (lsof).
-func portBusy(port string) (bool, error) {
-	out, err := exec.Command("lsof", "-ti", "tcp:"+port, "-sTCP:LISTEN").Output()
-	if err != nil && strings.TrimSpace(string(out)) == "" {
-		return false, nil
-	}
-	return strings.TrimSpace(string(out)) != "", nil
-}
-
-// App orchestration (merged from devstack): manage multiple dev servers
+// store.App orchestration (merged from devstack): manage multiple dev servers
 // (e.g. php-server/h5/admin) together, fully non-invasive to project code.
-
-type App struct {
-	Dir        string            `yaml:"dir"`
-	Cmd        string            `yaml:"cmd"`
-	Port       string            `yaml:"port,omitempty"`
-	Ports      []string          `yaml:"ports,omitempty"`
-	Domain     string            `yaml:"domain,omitempty"`
-	Env        map[string]string `yaml:"env,omitempty"`
-	Node       string            `yaml:"node,omitempty"`
-	PHP        string            `yaml:"php,omitempty"`
-	Extensions []string          `yaml:"extensions,omitempty"`
-}
-
-type AppConfig struct {
-	Namespace string         `yaml:"namespace,omitempty"`
-	Apps      map[string]App `yaml:"apps"`
-}
-
-type AppState struct {
-	Name   string   `json:"name"`
-	PID    int      `json:"pid"`
-	Log    string   `json:"log"`
-	Port   string   `json:"port"`
-	Ports  []string `json:"ports,omitempty"`
-	Domain string   `json:"domain"`
-}
 
 // loadAppConfig reads apps from dev.yaml (devstack compat, namespace-aware)
 // falling back to xpier.yaml's apps section.
-func loadAppConfig() (*AppConfig, string, error) {
+func loadAppConfig() (*store.AppConfig, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, "", err
 	}
 	devPath := filepath.Join(cwd, "dev.yaml")
-	if fileExists(devPath) {
+	if store.FileExists(devPath) {
 		data, err := os.ReadFile(devPath)
 		if err != nil {
 			return nil, "", err
 		}
-		var c AppConfig
-		if err := yamlUnmarshal(data, &c); err != nil {
+		var c store.AppConfig
+		if err := store.YAMLUnmarshal(data, &c); err != nil {
 			return nil, "", err
 		}
 		if len(c.Apps) == 0 {
@@ -99,47 +60,16 @@ func loadAppConfig() (*AppConfig, string, error) {
 		}
 		return &c, cwd, nil
 	}
-	manifestPath, _ := resolvePaths(cwd)
-	m, err := loadManifest(manifestPath)
+	manifestPath, _ := store.ResolvePaths(cwd)
+	m, err := store.LoadManifest(manifestPath)
 	if err != nil || len(m.Apps) == 0 {
 		return nil, "", fmt.Errorf("no apps defined (create dev.yaml or xpier.yaml with an apps: section)")
 	}
-	return &AppConfig{Namespace: "default", Apps: m.Apps}, cwd, nil
-}
-
-func appStatePath(ns, name string) string {
-	return filepath.Join(xpierHome(), "apps", ns, name+".json")
-}
-
-func appLogPath(ns, name string) string {
-	return filepath.Join(xpierHome(), "apps", ns, "logs", "dev-"+name+".log")
-}
-
-func loadAppState(ns, name string) (*AppState, error) {
-	data, err := os.ReadFile(appStatePath(ns, name))
-	if err != nil {
-		return nil, err
-	}
-	var s AppState
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
-func saveAppState(s *AppState, ns string) error {
-	if err := os.MkdirAll(filepath.Dir(appStatePath(ns, s.Name)), 0o755); err != nil {
-		return err
-	}
-	data, err := json.Marshal(s)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(appStatePath(ns, s.Name), data, 0o644)
+	return &store.AppConfig{Namespace: "default", Apps: m.Apps}, cwd, nil
 }
 
 func appPortBusy(port string) bool {
-	b, _ := portBusy(port)
+	b, _ := store.PortBusy(port)
 	return b
 }
 
@@ -152,7 +82,7 @@ func anyAppPortBusy(ports []string) bool {
 	return false
 }
 
-func appPorts(app App, s *AppState) []string {
+func appPorts(app store.App, s *store.AppState) []string {
 	if len(app.Ports) > 0 {
 		return app.Ports
 	}
@@ -187,12 +117,12 @@ func detectAppPorts(logPath string, known []string) []string {
 	return found
 }
 
-func appRunning(ns string, name string, app App) bool {
-	s, err := loadAppState(ns, name)
+func appRunning(ns string, name string, app store.App) bool {
+	s, err := store.LoadAppState(ns, name)
 	if err != nil {
 		return false
 	}
-	if pidAlive(s.PID) {
+	if store.PidAlive(s.PID) {
 		return true
 	}
 	return anyAppPortBusy(appPorts(app, s))
@@ -245,7 +175,7 @@ func appNginxConfPath(ns, name string) string {
 	return filepath.Join(nginxConfDir(), "dev-"+ns+"-"+name+".conf")
 }
 
-func writeAppNginxConf(ns, name string, app App) error {
+func writeAppNginxConf(ns, name string, app store.App) error {
 	if app.Domain == "" || app.Port == "" {
 		return nil
 	}
@@ -265,8 +195,8 @@ func writeAppNginxConf(ns, name string, app App) error {
         proxy_set_header Connection "upgrade";
     }
 }
-`, app.Domain, filepath.Join(xpierHome(), "certs", "wildcard.test.pem"),
-		filepath.Join(xpierHome(), "certs", "wildcard.test-key.pem"), app.Port)
+`, app.Domain, filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem"),
+		filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem"), app.Port)
 	return os.WriteFile(appNginxConfPath(ns, name), []byte(conf), 0o644)
 }
 
@@ -274,7 +204,7 @@ func removeAppNginxConf(ns, name string) {
 	os.Remove(appNginxConfPath(ns, name))
 }
 
-func appURL(app App, s *AppState) string {
+func appURL(app store.App, s *store.AppState) string {
 	if app.Domain != "" {
 		return "http://" + app.Domain + "/"
 	}
@@ -295,12 +225,12 @@ func appURL(app App, s *AppState) string {
 	return "-"
 }
 
-func appUp(ns string, name string, app App) error {
+func appUp(ns string, name string, app store.App) error {
 	if appRunning(ns, name, app) {
 		fmt.Printf("  %s already up\n", name)
 		return nil
 	}
-	known := appPorts(app, &AppState{})
+	known := appPorts(app, &store.AppState{})
 	if anyAppPortBusy(known) {
 		return fmt.Errorf("%s port(s) %s already in use", name, strings.Join(known, ","))
 	}
@@ -308,7 +238,7 @@ func appUp(ns string, name string, app App) error {
 	if err != nil {
 		return fmt.Errorf("%s 前置检查失败: %w", name, err)
 	}
-	logPath := appLogPath(ns, name)
+	logPath := store.AppLogPath(ns, name)
 	if err := os.MkdirAll(filepath.Dir(logPath), 0o755); err != nil {
 		return err
 	}
@@ -335,14 +265,14 @@ func appUp(ns string, name string, app App) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start %s: %w", name, err)
 	}
-	s := &AppState{Name: name, PID: cmd.Process.Pid, Log: logPath, Port: app.Port, Ports: known, Domain: app.Domain}
-	if err := saveAppState(s, ns); err != nil {
-		killGroup(cmd.Process.Pid, syscall.SIGKILL)
+	s := &store.AppState{Name: name, PID: cmd.Process.Pid, Log: logPath, Port: app.Port, Ports: known, Domain: app.Domain}
+	if err := store.SaveAppState(s, ns); err != nil {
+		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 		return err
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		if !pidAlive(s.PID) {
+		if !store.PidAlive(s.PID) {
 			return fmt.Errorf("%s exited during startup; see %s", name, logPath)
 		}
 		ports := appPorts(app, s)
@@ -352,7 +282,7 @@ func appUp(ns string, name string, app App) error {
 		if detected := detectAppPorts(logPath, known); len(detected) > 0 && anyAppPortBusy(detected) {
 			s.Ports = detected
 			s.Port = detected[0]
-			saveAppState(s, ns)
+			store.SaveAppState(s, ns)
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
@@ -361,28 +291,28 @@ func appUp(ns string, name string, app App) error {
 		if detected := detectAppPorts(logPath, known); len(detected) > 0 {
 			s.Ports = detected
 			s.Port = detected[0]
-			saveAppState(s, ns)
+			store.SaveAppState(s, ns)
 		}
 	}
 	fmt.Printf("  %s up (pid %d, %s)\n", name, s.PID, appURL(app, s))
 	return nil
 }
 
-func appDown(ns string, name string, app App) {
-	s, err := loadAppState(ns, name)
+func appDown(ns string, name string, app store.App) {
+	s, err := store.LoadAppState(ns, name)
 	if err != nil {
 		return
 	}
-	killGroup(s.PID, syscall.SIGTERM)
+	store.KillGroup(s.PID, syscall.SIGTERM)
 	all := appPorts(app, s)
 	for i := 0; i < 50; i++ {
-		if !pidAlive(s.PID) && !anyAppPortBusy(all) {
+		if !store.PidAlive(s.PID) && !anyAppPortBusy(all) {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	killAppPortHolders(all)
-	os.Remove(appStatePath(ns, name))
+	os.Remove(store.AppStatePath(ns, name))
 	removeAppNginxConf(ns, name)
 	fmt.Printf("  %s stopped\n", name)
 }
@@ -414,7 +344,7 @@ func appNvmNodeBinDir(req string) (string, bool) {
 	home, _ := os.UserHomeDir()
 	bases := []string{
 		filepath.Join(home, ".nvm", "versions", "node"),
-		filepath.Join(brewPrefix(), "opt", "nvm", "versions", "node"),
+		filepath.Join(store.BrewPrefix(), "opt", "nvm", "versions", "node"),
 		filepath.Join(home, "Library", "Application Support", "Herd", "config", "nvm", "versions", "node"),
 	}
 	for _, base := range bases {
@@ -433,7 +363,7 @@ func appEnsureNode(req string) (string, error) {
 	if dir, ok := appNvmNodeBinDir(req); ok {
 		return dir, nil
 	}
-	ok, err := confirmYesNo(fmt.Sprintf("需要 node %s，但未安装。是否安装 nvm（brew install nvm）并 nvm install %s？", req, req))
+	ok, err := store.ConfirmYesNo(fmt.Sprintf("需要 node %s，但未安装。是否安装 nvm（brew install nvm）并 nvm install %s？", req, req))
 	if err != nil {
 		return "", err
 	}
@@ -455,11 +385,11 @@ func appEnsureNode(req string) (string, error) {
 }
 
 func appEnsurePHP(ver string) error {
-	bin := filepath.Join(brewPrefix(), "opt", "php@"+ver, "bin", "php")
-	if fileExists(bin) {
+	bin := filepath.Join(store.BrewPrefix(), "opt", "php@"+ver, "bin", "php")
+	if store.FileExists(bin) {
 		return nil
 	}
-	ok, err := confirmYesNo(fmt.Sprintf("php@%s 未安装（brew install shivammathur/php/php@%s），是否安装？", ver, ver))
+	ok, err := store.ConfirmYesNo(fmt.Sprintf("php@%s 未安装（brew install shivammathur/php/php@%s），是否安装？", ver, ver))
 	if err != nil {
 		return err
 	}
@@ -473,13 +403,13 @@ func appEnsurePHP(ver string) error {
 }
 
 func appEnsureExtensions(ver string, exts []string) error {
-	bin := filepath.Join(brewPrefix(), "opt", "php@"+ver, "bin", "php")
+	bin := filepath.Join(store.BrewPrefix(), "opt", "php@"+ver, "bin", "php")
 	for _, ext := range exts {
 		out, err := exec.Command(bin, "-m").Output()
 		if err == nil && strings.Contains(string(out), ext) {
 			continue
 		}
-		ok, err := confirmYesNo(fmt.Sprintf("php@%s 缺少扩展 %s（brew install shivammathur/extensions/%s@%s），是否安装？", ver, ext, ext, ver))
+		ok, err := store.ConfirmYesNo(fmt.Sprintf("php@%s 缺少扩展 %s（brew install shivammathur/extensions/%s@%s），是否安装？", ver, ext, ext, ver))
 		if err != nil {
 			return err
 		}
@@ -493,7 +423,7 @@ func appEnsureExtensions(ver string, exts []string) error {
 	return nil
 }
 
-func ensureAppPrereqs(app App) (string, error) {
+func ensureAppPrereqs(app store.App) (string, error) {
 	var prepend string
 	if app.Node != "" {
 		dir, err := appEnsureNode(app.Node)
@@ -515,7 +445,7 @@ func ensureAppPrereqs(app App) (string, error) {
 	return prepend, nil
 }
 
-func appConfigHasDomain(cfg *AppConfig) bool {
+func appConfigHasDomain(cfg *store.AppConfig) bool {
 	for _, app := range cfg.Apps {
 		if app.Domain != "" {
 			return true
@@ -537,7 +467,7 @@ func cmdUp(args []string) error {
 		if appRunning(ns, n, app) {
 			conflicts = append(conflicts, fmt.Sprintf("%s(状态运行中)", n))
 		}
-		for _, p := range appPorts(app, &AppState{}) {
+		for _, p := range appPorts(app, &store.AppState{}) {
 			if appPortBusy(p) {
 				conflicts = append(conflicts, fmt.Sprintf("%s 端口 %s 已被占用", n, p))
 			}
@@ -579,7 +509,7 @@ func cmdDown(args []string) error {
 			any = true
 			continue
 		}
-		cfgPorts := appPorts(app, &AppState{})
+		cfgPorts := appPorts(app, &store.AppState{})
 		if anyAppPortBusy(cfgPorts) {
 			killAppPortHolders(cfgPorts)
 			removeAppNginxConf(ns, n)
@@ -639,15 +569,15 @@ func cmdAppStatus(args []string) error {
 		untracked := false
 		if appRunning(ns, n, app) {
 			state = "up"
-		} else if anyAppPortBusy(appPorts(app, &AppState{})) {
+		} else if anyAppPortBusy(appPorts(app, &store.AppState{})) {
 			state = "up"
 			untracked = true
 		} else if len(strayAppPids(app.Cmd)) > 0 {
 			state = "up"
 			untracked = true
 		}
-		var st *AppState
-		if s, err := loadAppState(ns, n); err == nil {
+		var st *store.AppState
+		if s, err := store.LoadAppState(ns, n); err == nil {
 			st = s
 			pid = strconv.Itoa(s.PID)
 			if port == "" {
@@ -800,11 +730,11 @@ func cmdAppRestart(args []string) error {
 	return nil
 }
 
-func clearAppCaches(app App, force bool) {
+func clearAppCaches(app store.App, force bool) {
 	if !force {
 		return
 	}
-	ok, err := confirmYesNo(fmt.Sprintf("将删除 %s 下的编译缓存（runtime/container、bootstrap/cache，非代码），确认？", app.Dir))
+	ok, err := store.ConfirmYesNo(fmt.Sprintf("将删除 %s 下的编译缓存（runtime/container、bootstrap/cache，非代码），确认？", app.Dir))
 	if err != nil {
 		fmt.Printf("  [warn] %v\n", err)
 		return
@@ -845,7 +775,7 @@ func cmdAppLog(args []string) error {
 	}
 	ns := cfg.Namespace
 	name := rest[0]
-	s, err := loadAppState(ns, name)
+	s, err := store.LoadAppState(ns, name)
 	if err != nil {
 		return fmt.Errorf("app %s not running (start with `xpier up`)", name)
 	}
@@ -884,7 +814,7 @@ func cmdAppLogsAll(args []string) error {
 	fmt.Printf("tailing %d app(s) - Ctrl-C to stop\n", len(names))
 	lineCh := make(chan string, 64)
 	for i, n := range names {
-		s, err := loadAppState(ns, n)
+		s, err := store.LoadAppState(ns, n)
 		if err != nil {
 			continue
 		}
@@ -918,9 +848,9 @@ func cmdAppURL(args []string) error {
 		return err
 	}
 	ns := cfg.Namespace
-	show := func(n string, app App) {
-		var st *AppState
-		if s, err := loadAppState(ns, n); err == nil {
+	show := func(n string, app store.App) {
+		var st *store.AppState
+		if s, err := store.LoadAppState(ns, n); err == nil {
 			st = s
 		}
 		fmt.Printf("  %-12s %s\n", n, appURL(app, st))

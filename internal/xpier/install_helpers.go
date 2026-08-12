@@ -7,6 +7,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"xpier/internal/store"
 )
 
 func currentUser() (*user.User, error) {
@@ -18,7 +19,7 @@ func currentUser() (*user.User, error) {
 
 // udpBusy reports whether something is listening on a UDP port (dnsmasq).
 func udpBusy(port string) (bool, error) {
-	out, err := runOut("lsof", "-ti", "udp:"+port)
+	out, err := store.RunOut("lsof", "-ti", "udp:"+port)
 	if err != nil && out == "" {
 		return false, nil
 	}
@@ -26,7 +27,7 @@ func udpBusy(port string) (bool, error) {
 }
 
 func dnsmasqConfPath() string {
-	return filepath.Join(xpierHome(), "dnsmasq", "dnsmasq.conf")
+	return filepath.Join(store.XpierHome(), "dnsmasq", "dnsmasq.conf")
 }
 
 func writeDnsmasqConfig(tld string) error {
@@ -43,14 +44,14 @@ address=/.%s/127.0.0.1
 }
 
 func certPaths(tld string) (string, string) {
-	return filepath.Join(xpierHome(), "certs", "wildcard."+tld+".pem"),
-		filepath.Join(xpierHome(), "certs", "wildcard."+tld+"-key.pem")
+	return filepath.Join(store.XpierHome(), "certs", "wildcard."+tld+".pem"),
+		filepath.Join(store.XpierHome(), "certs", "wildcard."+tld+"-key.pem")
 }
 
 // ensureWildcardCert generates a self-signed *.test wildcard cert if missing.
 func ensureWildcardCert(tld string) error {
 	cert, key := certPaths(tld)
-	if fileExists(cert) && fileExists(key) {
+	if store.FileExists(cert) && store.FileExists(key) {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(cert), 0o755); err != nil {
@@ -70,8 +71,8 @@ func ensureWildcardCert(tld string) error {
 func launchdDir() string { return "/Library/LaunchDaemons" }
 
 func launchdPlist(label string, args ...string) string {
-	outLog := filepath.Join(xpierHome(), "logs", label+".out.log")
-	errLog := filepath.Join(xpierHome(), "logs", label+".err.log")
+	outLog := filepath.Join(store.XpierHome(), "logs", label+".out.log")
+	errLog := filepath.Join(store.XpierHome(), "logs", label+".err.log")
 	argv := ""
 	for _, a := range args {
 		argv += fmt.Sprintf("    <string>%s</string>\n", a)
@@ -111,11 +112,11 @@ func launchdPlistDnsmasq() string {
 func dnsmasqBin() string {
 	// brew installs dnsmasq under sbin, not bin.
 	for _, p := range []string{
-		filepath.Join(brewPrefix(), "opt", "dnsmasq", "sbin", "dnsmasq"),
-		filepath.Join(brewPrefix(), "sbin", "dnsmasq"),
+		filepath.Join(store.BrewPrefix(), "opt", "dnsmasq", "sbin", "dnsmasq"),
+		filepath.Join(store.BrewPrefix(), "sbin", "dnsmasq"),
 		"/usr/local/opt/dnsmasq/sbin/dnsmasq",
 	} {
-		if fileExists(p) {
+		if store.FileExists(p) {
 			return p
 		}
 	}
@@ -152,6 +153,6 @@ func launchctlBootstrap(label, plistPath string) error {
 }
 
 func runOutErr(name string, args ...string) error {
-	_, err := runOut(name, args...)
+	_, err := store.RunOut(name, args...)
 	return err
 }

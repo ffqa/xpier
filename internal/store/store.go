@@ -1,0 +1,372 @@
+// Package store is the data layer for xpier: shared base helpers, types, and
+// all persistence (sites, proxies, app states, manifests, locks).
+package store
+
+import (
+	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+	"os/user"
+	"path/filepath"
+	"strings"
+	"syscall"
+
+	"gopkg.in/yaml.v3"
+)
+
+const (
+	ManifestName = "xpier.yaml"
+	LockName     = "xpier.lock"
+)
+
+// --- types ---
+
+type Manifest struct {
+	PHP        string            `yaml:"php,omitempty"`
+	Runtime    string            `yaml:"runtime,omitempty"`
+	Extensions map[string]string `yaml:"extensions,omitempty"`
+	Services   []string          `yaml:"services,omitempty"`
+	Apps       map[string]App    `yaml:"apps,omitempty"`
+}
+
+type App struct {
+	Dir        string            `yaml:"dir"`
+	Cmd        string            `yaml:"cmd"`
+	Port       string            `yaml:"port,omitempty"`
+	Ports      []string          `yaml:"ports,omitempty"`
+	Domain     string            `yaml:"domain,omitempty"`
+	Env        map[string]string `yaml:"env,omitempty"`
+	Node       string            `yaml:"node,omitempty"`
+	PHP        string            `yaml:"php,omitempty"`
+	Extensions []string          `yaml:"extensions,omitempty"`
+}
+
+type AppConfig struct {
+	Namespace string         `yaml:"namespace,omitempty"`
+	Apps      map[string]App `yaml:"apps"`
+}
+
+type Sites struct {
+	TLD    string          `yaml:"tld"`
+	Parked []string        `yaml:"parked,omitempty"`
+	Sites  map[string]Site `yaml:"sites"`
+}
+
+type Site struct {
+	Path   string `json:"path"`
+	PHP    string `json:"php,omitempty"`
+	Node   string `json:"node,omitempty"`
+	Driver string `json:"driver"`
+}
+
+type Lock struct {
+	SchemaVersion int           `yaml:"schema_version"`
+	GeneratedAt   string        `yaml:"generated_at"`
+	PHP           PhpLock       `yaml:"php"`
+	Extensions    []ExtLock     `yaml:"extensions"`
+	Services      []ServiceLock `yaml:"services"`
+}
+
+type PhpLock struct {
+	Version string `yaml:"version"`
+	Path    string `yaml:"path"`
+}
+
+type ExtLock struct {
+	Name       string `yaml:"name"`
+	Constraint string `yaml:"constraint"`
+	Installed  string `yaml:"installed"`
+	Loaded     bool   `yaml:"loaded"`
+}
+
+type ServiceLock struct {
+	Name    string `yaml:"name"`
+	Running bool   `yaml:"running"`
+}
+
+type AppState struct {
+	Name   string   `json:"name"`
+	PID    int      `json:"pid"`
+	Log    string   `json:"log"`
+	Port   string   `json:"port"`
+	Ports  []string `json:"ports,omitempty"`
+	Domain string   `json:"domain"`
+}
+
+// --- base helpers ---
+
+func XpierHome() string {
+	// When run via `sudo xpier install`, keep using the real user's home.
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" && os.Geteuid() == 0 {
+		if u, err := user.Lookup(sudoUser); err == nil {
+			return filepath.Join(u.HomeDir, ".xpier")
+		}
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "/tmp"
+	}
+	return filepath.Join(home, ".xpier")
+}
+
+func SlugFor(dir string) string {
+	abs, _ := filepath.Abs(dir)
+	sum := sha256.Sum256([]byte(abs))
+	return hex.EncodeToString(sum[:4])
+}
+
+func SlugName(dir string) string {
+	abs, _ := filepath.Abs(dir)
+	return filepath.Base(abs) + "_" + SlugFor(abs)
+}
+
+func PidAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil || err == syscall.EPERM
+}
+
+func KillGroup(pid int, sig syscall.Signal) error {
+	err := syscall.Kill(-pid, sig)
+	if err == syscall.ESRCH {
+		return syscall.Kill(pid, sig)
+	}
+	return err
+}
+
+func RunOut(name string, args ...string) (string, error) {
+	out, err := exec.Command(name, args...).Output()
+	return strings.TrimSpace(string(out)), err
+}
+
+func FileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func BrewPrefix() string {
+	out, err := exec.Command("brew", "--prefix").Output()
+	if err != nil {
+		return "/usr/local"
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func PortBusy(port string) (bool, error) {
+	out, err := exec.Command("lsof", "-ti", "tcp:"+port, "-sTCP:LISTEN").Output()
+	if err != nil && strings.TrimSpace(string(out)) == "" {
+		return false, nil
+	}
+	return strings.TrimSpace(string(out)) != "", nil
+}
+
+func ConfirmYesNo(prompt string) (bool, error) {
+	fmt.Printf("%s [y/N] ", prompt)
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && line == "" {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true, nil
+	}
+	return false, nil
+}
+
+func YAMLUnmarshal(data []byte, v any) error { return yaml.Unmarshal(data, v) }
+
+// --- manifest / lock paths ---
+
+func ProjectPaths(dir string) (string, string) {
+	base := filepath.Join(XpierHome(), "projects", SlugName(dir))
+	return filepath.Join(base, ManifestName), filepath.Join(base, LockName)
+}
+
+func ResolvePaths(dir string) (string, string) {
+	localManifest := filepath.Join(dir, ManifestName)
+	if _, err := os.Stat(localManifest); err == nil {
+		return localManifest, filepath.Join(dir, LockName)
+	}
+	return ProjectPaths(dir)
+}
+
+func EnsureProjectDir(dir string) error {
+	base, _ := ProjectPaths(dir)
+	return os.MkdirAll(filepath.Dir(base), 0o755)
+}
+
+func DefaultManifest() *Manifest {
+	return &Manifest{Runtime: "fpm"}
+}
+
+func (m *Manifest) Save(path string) error {
+	data, err := yaml.Marshal(m)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+func LoadManifest(path string) (*Manifest, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var m Manifest
+	if err := yaml.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func LoadLock(path string) (*Lock, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var l Lock
+	if err := yaml.Unmarshal(data, &l); err != nil {
+		return nil, err
+	}
+	return &l, nil
+}
+
+func (l *Lock) Save(path string) error {
+	data, err := yaml.Marshal(l)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}
+
+// --- sites registry ---
+
+func SitesPath() string { return filepath.Join(XpierHome(), "sites.json") }
+
+func DefaultSites() *Sites {
+	return &Sites{TLD: "test", Sites: map[string]Site{}}
+}
+
+func LoadSites() (*Sites, error) {
+	data, err := os.ReadFile(SitesPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return DefaultSites(), nil
+		}
+		return nil, err
+	}
+	var s Sites
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	if s.TLD == "" {
+		s.TLD = "test"
+	}
+	if s.Sites == nil {
+		s.Sites = map[string]Site{}
+	}
+	return &s, nil
+}
+
+func (s *Sites) Save() error {
+	if err := os.MkdirAll(filepath.Dir(SitesPath()), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(SitesPath(), data, 0o644)
+}
+
+// --- proxies registry ---
+
+func ProxiesPath() string { return filepath.Join(XpierHome(), "proxies.json") }
+
+func LoadProxies() (map[string]string, error) {
+	data, err := os.ReadFile(ProxiesPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return map[string]string{}, nil
+		}
+		return nil, err
+	}
+	var m map[string]string
+	if err := json.Unmarshal(data, &m); err != nil {
+		return nil, err
+	}
+	if m == nil {
+		m = map[string]string{}
+	}
+	return m, nil
+}
+
+func SaveProxies(m map[string]string) error {
+	if err := os.MkdirAll(filepath.Dir(ProxiesPath()), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(ProxiesPath(), data, 0o644)
+}
+
+// --- app state ---
+
+func AppStatePath(ns, name string) string {
+	return filepath.Join(XpierHome(), "apps", ns, name+".json")
+}
+
+func AppLogPath(ns, name string) string {
+	return filepath.Join(XpierHome(), "apps", ns, "logs", "dev-"+name+".log")
+}
+
+func LoadAppState(ns, name string) (*AppState, error) {
+	data, err := os.ReadFile(AppStatePath(ns, name))
+	if err != nil {
+		return nil, err
+	}
+	var s AppState
+	if err := json.Unmarshal(data, &s); err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func SaveAppState(s *AppState, ns string) error {
+	if err := os.MkdirAll(filepath.Dir(AppStatePath(ns, s.Name)), 0o755); err != nil {
+		return err
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(AppStatePath(ns, s.Name), data, 0o644)
+}
+
+// EnsureBrewPackage prompts to install a missing brew package and installs it
+// on confirmation. Returns nil when the binary is already present.
+func EnsureBrewPackage(bin, formula, display string) error {
+	if FileExists(bin) {
+		return nil
+	}
+	ok, err := ConfirmYesNo(fmt.Sprintf("%s 未安装（brew install %s），是否现在安装？", display, formula))
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("%s not installed; run `brew install %s` and retry", display, formula)
+	}
+	fmt.Printf("installing %s...\n", formula)
+	if out, err := exec.Command("brew", "install", formula).CombinedOutput(); err != nil {
+		return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
+	}
+	return nil
+}

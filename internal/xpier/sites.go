@@ -1,7 +1,6 @@
 package xpier
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,64 +8,12 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"xpier/internal/store"
 )
 
 var safeSiteNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
-type Site struct {
-	Path   string `json:"path"`
-	PHP    string `json:"php,omitempty"`
-	Node   string `json:"node,omitempty"`
-	Driver string `json:"driver"`
-}
-
-type Sites struct {
-	TLD    string          `json:"tld"`
-	Parked []string        `json:"parked,omitempty"`
-	Sites  map[string]Site `json:"sites"`
-}
-
-func sitesPath() string {
-	return filepath.Join(xpierHome(), "sites.json")
-}
-
-func defaultSites() *Sites {
-	return &Sites{TLD: "test", Sites: map[string]Site{}}
-}
-
-func loadSites() (*Sites, error) {
-	data, err := os.ReadFile(sitesPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return defaultSites(), nil
-		}
-		return nil, err
-	}
-	var s Sites
-	if err := json.Unmarshal(data, &s); err != nil {
-		return nil, err
-	}
-	if s.TLD == "" {
-		s.TLD = "test"
-	}
-	if s.Sites == nil {
-		s.Sites = map[string]Site{}
-	}
-	return &s, nil
-}
-
-func (s *Sites) save() error {
-	if err := os.MkdirAll(filepath.Dir(sitesPath()), 0o755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(sitesPath(), data, 0o644)
-}
-
-func siteDomain(s *Sites, name string) string {
+func siteDomain(s *store.Sites, name string) string {
 	return name + "." + s.TLD
 }
 
@@ -77,20 +24,20 @@ func siteDomain(s *Sites, name string) string {
 //	spa:     dist/index.html (static, dist as document root)
 //	static:  anything else
 func detectDriver(dir string) string {
-	if fileExists(filepath.Join(dir, "bin", "hyperf.php")) {
+	if store.FileExists(filepath.Join(dir, "bin", "hyperf.php")) {
 		return "hyperf"
 	}
-	if fileExists(filepath.Join(dir, "public", "index.php")) {
+	if store.FileExists(filepath.Join(dir, "public", "index.php")) {
 		return "laravel"
 	}
-	if fileExists(filepath.Join(dir, "dist", "index.html")) {
+	if store.FileExists(filepath.Join(dir, "dist", "index.html")) {
 		return "spa"
 	}
 	return "static"
 }
 
 // siteRoot returns the nginx document root for a site.
-func siteRoot(site Site) string {
+func siteRoot(site store.Site) string {
 	switch site.Driver {
 	case "laravel":
 		return filepath.Join(site.Path, "public")
@@ -102,7 +49,7 @@ func siteRoot(site Site) string {
 
 // hyperfPort returns the proxy port for a hyperf site, reading
 // config/autoload/server.php when possible.
-func hyperfPort(site Site) string {
+func hyperfPort(site store.Site) string {
 	ports := serverPorts(site.Path)
 	if p, ok := ports["http"]; ok {
 		return p
@@ -119,7 +66,7 @@ func cmdPark(args []string) error {
 	if fs.NArg() < 1 {
 		return fmt.Errorf("usage: xpier park <directory> [directory ...]")
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -137,7 +84,7 @@ func cmdPark(args []string) error {
 		fmt.Printf("parked %s\n", abs)
 	}
 	syncParked(sites)
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	for _, name := range sortedKeys(sites.Sites) {
@@ -150,7 +97,7 @@ func cmdPark(args []string) error {
 }
 
 // syncParked auto-registers immediate subdirectories of parked paths.
-func syncParked(sites *Sites) {
+func syncParked(sites *store.Sites) {
 	for _, dir := range sites.Parked {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -165,7 +112,7 @@ func syncParked(sites *Sites) {
 				continue
 			}
 			path := filepath.Join(dir, name)
-			sites.Sites[name] = Site{Path: path, Driver: detectDriver(path)}
+			sites.Sites[name] = store.Site{Path: path, Driver: detectDriver(path)}
 		}
 	}
 }
@@ -180,7 +127,7 @@ func containsString(list []string, s string) bool {
 }
 
 // writeAllSiteConfigs regenerates nginx configs for every registered site.
-func writeAllSiteConfigs(sites *Sites) error {
+func writeAllSiteConfigs(sites *store.Sites) error {
 	if err := writeDefaultSiteConfig(); err != nil {
 		return err
 	}
@@ -213,21 +160,21 @@ func cmdLink(args []string) error {
 	if !safeSiteNameRe.MatchString(siteName) {
 		return fmt.Errorf("invalid site name %q (use [a-z0-9._-])", siteName)
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
 	if _, exists := sites.Sites[siteName]; exists {
 		return fmt.Errorf("site %s already linked (unlink first)", siteName)
 	}
-	site := Site{Path: cwd, Driver: detectDriver(cwd)}
+	site := store.Site{Path: cwd, Driver: detectDriver(cwd)}
 	if *php != "" {
 		site.PHP = *php
 	} else if m, err := loadManifestFrom(cwd); err == nil && m.PHP != "" {
 		site.PHP = m.PHP
 	}
 	sites.Sites[siteName] = site
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	if err := writeSiteNginxConfig(sites, siteName); err != nil {
@@ -257,7 +204,7 @@ func cmdUnlink(args []string) error {
 	if siteName == "" {
 		siteName = filepath.Base(cwd)
 	}
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -265,7 +212,7 @@ func cmdUnlink(args []string) error {
 		return fmt.Errorf("site %s is not linked", siteName)
 	}
 	delete(sites.Sites, siteName)
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	if err := removeSiteNginxConfig(siteName); err != nil {
@@ -287,7 +234,7 @@ func cmdSitePHP(args []string) error {
 		return fmt.Errorf("usage: xpier site:php <site> [version]")
 	}
 	siteName := fs.Arg(0)
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -298,7 +245,7 @@ func cmdSitePHP(args []string) error {
 	if fs.NArg() == 2 {
 		site.PHP = fs.Arg(1)
 		sites.Sites[siteName] = site
-		if err := sites.save(); err != nil {
+		if err := sites.Save(); err != nil {
 			return err
 		}
 		if err := writeSiteNginxConfig(sites, siteName); err != nil {
@@ -315,16 +262,16 @@ func cmdSitePHP(args []string) error {
 }
 
 func cmdSites(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
 	syncParked(sites)
-	if err := sites.save(); err != nil {
+	if err := sites.Save(); err != nil {
 		return err
 	}
 	nginxUp := false
-	if b, _ := portBusy("80"); b {
+	if b, _ := store.PortBusy("80"); b {
 		nginxUp = true
 	}
 	dnsUp := false

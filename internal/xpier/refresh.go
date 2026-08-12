@@ -1,11 +1,14 @@
 package xpier
 
-import "fmt"
+import (
+	"fmt"
+	"xpier/internal/store"
+)
 
 // cmdRefresh regenerates all site/app nginx configs with current paths and
 // reloads nginx. Needed after the tool's home directory is moved/renamed.
 func cmdRefresh(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"xpier/internal/store"
 )
 
 // cmdLog tails a site's php-fpm log (Herd's `herd log` equivalent).
@@ -20,7 +21,7 @@ func cmdLog(args []string) error {
 	}
 	ver := ""
 	if fs.NArg() > 0 {
-		sites, err := loadSites()
+		sites, err := store.LoadSites()
 		if err != nil {
 			return err
 		}
@@ -33,8 +34,8 @@ func cmdLog(args []string) error {
 			ver = defaultPhpVersion()
 		}
 	}
-	logPath := filepath.Join(xpierHome(), "logs", "php-fpm-"+ver+".log")
-	if !fileExists(logPath) {
+	logPath := filepath.Join(store.XpierHome(), "logs", "php-fpm-"+ver+".log")
+	if !store.FileExists(logPath) {
 		return fmt.Errorf("log %s not found (start the site with `xpier sites:up`)", logPath)
 	}
 	if *follow {
@@ -54,24 +55,24 @@ func cmdLog(args []string) error {
 // --- Mailpit (mail capture) ---
 
 func mailpitBin() string {
-	if p := filepath.Join(brewPrefix(), "bin", "mailpit"); fileExists(p) {
+	if p := filepath.Join(store.BrewPrefix(), "bin", "mailpit"); store.FileExists(p) {
 		return p
 	}
 	return "/usr/local/bin/mailpit"
 }
 
-func mailStatePath() string { return filepath.Join(xpierHome(), "servers", "mailpit.json") }
+func mailStatePath() string { return filepath.Join(store.XpierHome(), "servers", "mailpit.json") }
 
 func cmdMailUp(args []string) error {
-	if st, err := loadMailState(); err == nil && pidAlive(st.PID) {
+	if st, err := loadMailState(); err == nil && store.PidAlive(st.PID) {
 		fmt.Printf("mailpit already running (pid %d, UI http://127.0.0.1:8025)\n", st.PID)
 		return nil
 	}
 	bin := mailpitBin()
-	if err := ensureBrewPackage(bin, "mailpit", "mailpit"); err != nil {
+	if err := store.EnsureBrewPackage(bin, "mailpit", "mailpit"); err != nil {
 		return err
 	}
-	logPath := filepath.Join(xpierHome(), "logs", "mailpit.log")
+	logPath := filepath.Join(store.XpierHome(), "logs", "mailpit.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		return err
@@ -94,8 +95,8 @@ func cmdMailDown(args []string) error {
 	if err != nil {
 		return fmt.Errorf("mailpit not running")
 	}
-	if pidAlive(st.PID) {
-		killGroup(st.PID, 15)
+	if store.PidAlive(st.PID) {
+		store.KillGroup(st.PID, 15)
 	}
 	os.Remove(mailStatePath())
 	fmt.Println("mailpit stopped")
@@ -109,7 +110,7 @@ func cmdMail(args []string) error {
 // --- Xdebug toggle ---
 
 func xdebugConfPath(ver string) string {
-	return filepath.Join(brewPrefix(), "etc", "php", ver, "conf.d", "xpier-xdebug.ini")
+	return filepath.Join(store.BrewPrefix(), "etc", "php", ver, "conf.d", "xpier-xdebug.ini")
 }
 
 func cmdXdebug(args []string) error {
@@ -121,13 +122,13 @@ func cmdXdebug(args []string) error {
 	conf := xdebugConfPath(*ver)
 	switch {
 	case fs.NArg() == 0 || fs.Arg(0) == "status":
-		if fileExists(conf) {
+		if store.FileExists(conf) {
 			fmt.Printf("xdebug ON (php@%s)\n", *ver)
 		} else {
 			fmt.Printf("xdebug OFF (php@%s)\n", *ver)
 		}
 	case fs.Arg(0) == "on":
-		ext := filepath.Join(brewPrefix(), "opt", "php@"+*ver, "lib", "php", "extensions", "no-debug-non-zts-*", "xdebug.so")
+		ext := filepath.Join(store.BrewPrefix(), "opt", "php@"+*ver, "lib", "php", "extensions", "no-debug-non-zts-*", "xdebug.so")
 		if matches, _ := filepath.Glob(ext); len(matches) == 0 {
 			return fmt.Errorf("xdebug extension not installed for php@%s (run `xpier sync --apply` or brew install shivammathur/extensions/xdebug@%s)", *ver, *ver)
 		}

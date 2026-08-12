@@ -6,18 +6,19 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"xpier/internal/store"
 )
 
 func caPaths() (string, string) {
-	return filepath.Join(xpierHome(), "ca", "xpier-ca.pem"),
-		filepath.Join(xpierHome(), "ca", "xpier-ca-key.pem")
+	return filepath.Join(store.XpierHome(), "ca", "xpier-ca.pem"),
+		filepath.Join(store.XpierHome(), "ca", "xpier-ca-key.pem")
 }
 
 // ensureCA generates a local CA (if missing) so site certs can be trusted by
 // the system keychain with no browser warnings.
 func ensureCA() error {
 	cert, key := caPaths()
-	if fileExists(cert) && fileExists(key) {
+	if store.FileExists(cert) && store.FileExists(key) {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(cert), 0o755); err != nil {
@@ -56,15 +57,15 @@ func trustCA() error {
 // signed by the xpier CA once the CA exists.
 func ensureWildcardCertSignedByCA(tld string) error {
 	cert, key := certPaths(tld)
-	if fileExists(cert) && fileExists(key) {
+	if store.FileExists(cert) && store.FileExists(key) {
 		// Already present; leave it (first secure run replaces it).
 		return nil
 	}
 	caCert, caKey := caPaths()
-	if !fileExists(caCert) {
+	if !store.FileExists(caCert) {
 		return nil // CA not created yet; keep self-signed
 	}
-	csr := filepath.Join(xpierHome(), "ca", "wildcard."+tld+".csr")
+	csr := filepath.Join(store.XpierHome(), "ca", "wildcard."+tld+".csr")
 	if err := os.MkdirAll(filepath.Dir(cert), 0o755); err != nil {
 		return err
 	}
@@ -83,7 +84,7 @@ func ensureWildcardCertSignedByCA(tld string) error {
 		return err
 	}
 	// Sign with the CA; SANs go through an extfile.
-	ext := filepath.Join(xpierHome(), "ca", "wildcard."+tld+".ext")
+	ext := filepath.Join(store.XpierHome(), "ca", "wildcard."+tld+".ext")
 	if err := os.WriteFile(ext, []byte("subjectAltName=DNS:*."+tld+",DNS:"+tld+",DNS:localhost"), 0o644); err != nil {
 		return err
 	}
@@ -98,19 +99,19 @@ func ensureWildcardCertSignedByCA(tld string) error {
 
 // domainCertPaths returns cert/key paths for a specific domain.
 func domainCertPaths(domain string) (string, string) {
-	return filepath.Join(xpierHome(), "certs", domain+".pem"),
-		filepath.Join(xpierHome(), "certs", domain+"-key.pem")
+	return filepath.Join(store.XpierHome(), "certs", domain+".pem"),
+		filepath.Join(store.XpierHome(), "certs", domain+"-key.pem")
 }
 
 // ensureDomainCert signs a cert for a specific domain (SAN: domain + wildcard
 // of its base, e.g. img.test28.test -> *.test28.test) with the xpier CA.
 func ensureDomainCert(domain string) error {
 	cert, key := domainCertPaths(domain)
-	if fileExists(cert) && fileExists(key) {
+	if store.FileExists(cert) && store.FileExists(key) {
 		return nil
 	}
 	caCert, caKey := caPaths()
-	if !fileExists(caCert) {
+	if !store.FileExists(caCert) {
 		return fmt.Errorf("xpier CA missing; run `sudo xpier secure` first")
 	}
 	// base = domain without its first label (img.test28.test -> test28.test);
@@ -120,8 +121,8 @@ func ensureDomainCert(domain string) error {
 	if len(labels) == 2 {
 		wild = "*." + labels[1]
 	}
-	csr := filepath.Join(xpierHome(), "ca", "domain-"+domain+".csr")
-	ext := filepath.Join(xpierHome(), "ca", "domain-"+domain+".ext")
+	csr := filepath.Join(store.XpierHome(), "ca", "domain-"+domain+".csr")
+	ext := filepath.Join(store.XpierHome(), "ca", "domain-"+domain+".ext")
 	if err := os.MkdirAll(filepath.Dir(cert), 0o755); err != nil {
 		return err
 	}
@@ -170,7 +171,7 @@ func cmdSecure(args []string) error {
 		// Resolve the full domain: a linked site name becomes
 		// <name>.<tld>; otherwise append the TLD unless already full.
 		domain := arg
-		if sites, err := loadSites(); err == nil {
+		if sites, err := store.LoadSites(); err == nil {
 			if _, ok := sites.Sites[arg]; ok {
 				domain = siteDomain(sites, arg)
 			} else if !strings.HasSuffix(arg, "."+sites.TLD) {
@@ -198,7 +199,7 @@ func cmdSecure(args []string) error {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
 	// Regenerate site configs so they pick up the freshly signed cert.
-	if sites, err := loadSites(); err == nil {
+	if sites, err := store.LoadSites(); err == nil {
 		writeAllSiteConfigs(sites)
 		nginxReload()
 	}
@@ -206,7 +207,7 @@ func cmdSecure(args []string) error {
 }
 
 func cmdSecured(args []string) error {
-	sites, err := loadSites()
+	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
