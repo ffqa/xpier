@@ -33,7 +33,7 @@ func Run(args []string) error {
 		return cmdDoctor(args[1:])
 	case "status":
 		return cmdStatus(args[1:])
-	case "app":
+	case "app", "site", "tls", "ssl", "svc", "config", "env", "groups":
 		return cmdNamespace(args[1:])
 	case "app:init":
 		return apps.CmdInit(args[1:])
