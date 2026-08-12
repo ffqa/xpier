@@ -444,3 +444,28 @@ func TestWriteAppNginxConfDomainWithoutPort(t *testing.T) {
 		t.Error("domain without a port should error, not silently skip")
 	}
 }
+
+func TestUpGuidanceByProjectType(t *testing.T) {
+	homeTemp(t)
+	// fpm project: up explains link, no crash.
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeFile(t, filepath.Join(dir, "xpier.yaml"), "runtime: fpm\n")
+	if err := CmdUp(nil); err == nil || !strings.Contains(err.Error(), "xpier link") {
+		t.Errorf("fpm guidance = %v", err)
+	}
+	// hyperf project: up points at app:init.
+	dir2 := t.TempDir()
+	chdir(t, dir2)
+	writeFile(t, filepath.Join(dir2, "xpier.yaml"), "runtime: hyperf\n")
+	if err := CmdUp(nil); err == nil || !strings.Contains(err.Error(), "app:init") {
+		t.Errorf("hyperf guidance = %v", err)
+	}
+	// static project: same as fpm.
+	dir3 := t.TempDir()
+	chdir(t, dir3)
+	writeFile(t, filepath.Join(dir3, "xpier.yaml"), "runtime: static\n")
+	if err := CmdUp(nil); err == nil || !strings.Contains(err.Error(), "无需") {
+		t.Errorf("static guidance = %v", err)
+	}
+}

@@ -591,10 +591,31 @@ func appConfigHasDomain(cfg *store.AppConfig) bool {
 
 // --- commands ---
 
+// upGuidance explains how a project type is meant to run when no apps are
+// defined, instead of a bare "no apps defined" error.
+func upGuidance() error {
+	cwd, _ := os.Getwd()
+	manifestPath, _ := store.ResolvePaths(cwd)
+	m, err := store.LoadManifest(manifestPath)
+	rt := "fpm"
+	if err == nil {
+		rt = m.Runtime
+		if rt == "" {
+			rt = "fpm"
+		}
+	}
+	switch rt {
+	case "hyperf", "swoole", "frankenphp":
+		return fmt.Errorf("运行时 %s 需要 apps: 定义启动命令才能 `xpier up`;运行 `xpier app:init` 生成模板", rt)
+	default:
+		return fmt.Errorf("项目类型 %s 无需 `xpier up`(未定义 apps):站点由 nginx+php-fpm 直接服务;cd 项目 && xpier link,域名 = <目录名>.test", rt)
+	}
+}
+
 func CmdUp(args []string) error {
 	cfg, cwd, err := LoadAppConfig()
 	if err != nil {
-		return err
+		return upGuidance()
 	}
 	ns := cfg.Namespace
 	var conflicts []string
@@ -640,7 +661,7 @@ func CmdUp(args []string) error {
 func CmdDown(args []string) error {
 	cfg, _, err := LoadAppConfig()
 	if err != nil {
-		return err
+		return upGuidance()
 	}
 	ns := cfg.Namespace
 	any := false
@@ -827,7 +848,7 @@ func CmdStart(args []string) error {
 	name := rest[0]
 	cfg, _, err := LoadAppConfig()
 	if err != nil {
-		return err
+		return upGuidance()
 	}
 	ns := cfg.Namespace
 	app, ok := cfg.Apps[name]

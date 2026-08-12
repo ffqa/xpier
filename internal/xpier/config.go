@@ -13,7 +13,12 @@ import (
 const manifestTemplate = `# xpier 项目钉定配置(可选:没有它 xpier 也能自动检测)
 # 所有字段都可选,不需要的直接删掉或保持注释。字段说明见 docs/architecture.md。
 
-runtime: %s                  # 运行时:fpm | hyperf | swoole | frankenphp
+runtime: %s                  # 项目类型/运行时(决定 xpier up 怎么处理):
+#  ┌ fpm        标准 PHP / Laravel —— 无需 up:cd 项目 && xpier link,nginx+php-fpm 直接服务,访问 <目录名>.test
+#  ├ static     静态站点            —— 同 fpm,link 后 nginx 直接出文件
+#  ├ hyperf     Hyperf 常驻服务     —— 在下方 apps: 写启动命令,xpier up 拉起
+#  ├ swoole     Swoole 常驻服务     —— 同 hyperf
+#  └ frankenphp FrankenPHP          —— 同 hyperf
 # php: "8.4"                # 钉定 PHP 版本(如 "8.2" / "8.4")
 
 # extensions:               # 需要的 PHP 扩展(键=扩展名, 值=版本约束)
@@ -86,9 +91,9 @@ func cmdInit(args []string) error {
 	}
 	if runtime != "" {
 		switch runtime {
-		case "fpm", "hyperf", "swoole", "frankenphp":
+		case "fpm", "static", "hyperf", "swoole", "frankenphp":
 		default:
-			return fmt.Errorf("invalid runtime %q (fpm | hyperf | swoole | frankenphp)", runtime)
+			return fmt.Errorf("invalid runtime %q (fpm | static | hyperf | swoole | frankenphp)", runtime)
 		}
 	}
 	cwd, err := os.Getwd()
