@@ -642,13 +642,22 @@ func CmdUp(args []string) error {
 		}
 	}
 	if appConfigHasDomain(cfg) {
+		var failed []string
 		var confErrs []string
 		for n, app := range cfg.Apps {
 			if err := writeAppNginxConf(ns, n, app); err != nil {
+				failed = append(failed, n)
 				confErrs = append(confErrs, fmt.Sprintf("%s: %v", n, err))
 			}
 		}
 		if len(confErrs) > 0 {
+			// Roll back the apps whose proxy cannot be built so a failed
+			// `up` never leaves half-started processes behind.
+			for _, n := range failed {
+				if appRunning(ns, n, cfg.Apps[n]) {
+					appDown(ns, n, cfg.Apps[n])
+				}
+			}
 			return fmt.Errorf("部分应用域名代理无法生成:\n  %s", strings.Join(confErrs, "\n  "))
 		}
 		nginx.NginxReload()
