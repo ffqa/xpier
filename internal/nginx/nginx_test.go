@@ -253,3 +253,38 @@ return [
 		t.Error("HyperfPort fallback should be 9501")
 	}
 }
+
+func TestCurrentTLD(t *testing.T) {
+	homeTemp(t)
+	if got := CurrentTLD(); got != "test" {
+		t.Errorf("CurrentTLD default = %q, want test", got)
+	}
+	s := store.DefaultSites()
+	s.TLD = "dev"
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if got := CurrentTLD(); got != "dev" {
+		t.Errorf("CurrentTLD = %q, want dev", got)
+	}
+}
+
+func TestWriteDefaultSiteConfigUsesCurrentTLD(t *testing.T) {
+	homeTemp(t)
+	s := store.DefaultSites()
+	s.TLD = "dev"
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteDefaultSiteConfig(); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(NginxConfDir(), "00-default.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := string(data)
+	if !strings.Contains(conf, "wildcard.dev.pem") || strings.Contains(conf, "wildcard.test.pem") {
+		t.Errorf("default site cert should reference current TLD:\n%s", conf)
+	}
+}

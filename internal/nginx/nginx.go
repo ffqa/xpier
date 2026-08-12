@@ -202,11 +202,20 @@ func RemoveSiteNginxConfig(name string) error {
 	return err
 }
 
+// CurrentTLD returns the active TLD (defaults to "test"). Certificates and
+// configs must be derived from it so `xpier tld dev` does not break TLS.
+func CurrentTLD() string {
+	tld := "test"
+	if sites, err := store.LoadSites(); err == nil && sites.TLD != "" {
+		tld = sites.TLD
+	}
+	return tld
+}
+
 // WriteDefaultSiteConfig returns 404 for any host that is not a registered
 // site, so an unlinked domain can never fall through to another site.
 func WriteDefaultSiteConfig() error {
-	cert := filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem")
-	certKey := filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem")
+	cert, certKey := CertPaths(CurrentTLD())
 	conf := fmt.Sprintf(`server {
     listen 80 default_server;
     listen 443 ssl default_server;

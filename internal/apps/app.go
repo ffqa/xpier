@@ -177,9 +177,14 @@ func appNginxConfPath(ns, name string) string {
 }
 
 func writeAppNginxConf(ns, name string, app store.App) error {
-	if app.Domain == "" || app.Port == "" {
+	port := app.Port
+	if port == "" && len(app.Ports) > 0 {
+		port = app.Ports[0]
+	}
+	if app.Domain == "" || port == "" {
 		return nil
 	}
+	cert, certKey := nginx.CertPaths(nginx.CurrentTLD())
 	conf := fmt.Sprintf(`server {
     listen 80;
     listen 443 ssl;
@@ -196,8 +201,10 @@ func writeAppNginxConf(ns, name string, app store.App) error {
         proxy_set_header Connection "upgrade";
     }
 }
-`, app.Domain, filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem"),
-		filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem"), app.Port)
+`, app.Domain, cert, certKey, app.Port)
+	if err := os.MkdirAll(filepath.Dir(appNginxConfPath(ns, name)), 0o755); err != nil {
+		return err
+	}
 	return os.WriteFile(appNginxConfPath(ns, name), []byte(conf), 0o644)
 }
 

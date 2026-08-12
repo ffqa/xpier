@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"xpier/internal/nginx"
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
 
@@ -326,7 +327,16 @@ func CmdTLD(args []string) error {
 		if err := store.WriteDnsmasqConfig(tld); err != nil {
 			return err
 		}
-		fmt.Printf("tld set to .%s (dnsmasq config updated; run `sudo xpier install` to apply DNS)\n", tld)
+		if err := service.EnsureWildcardCert(tld); err != nil {
+			return err
+		}
+		if err := nginx.WriteAllSiteConfigs(sites); err != nil {
+			return err
+		}
+		if err := nginx.NginxReload(); err != nil {
+			fmt.Printf("[warn] nginx reload failed: %v\n", err)
+		}
+		fmt.Printf("tld set to .%s (wildcard cert + site configs regenerated)\n", tld)
 		return nil
 	}
 	fmt.Println("." + sites.TLD)

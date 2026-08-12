@@ -22,6 +22,7 @@ func writeProxyConf(domain, upstream string) error {
 	if !strings.HasPrefix(upstream, "http://") && !strings.HasPrefix(upstream, "https://") {
 		upstream = "http://" + upstream
 	}
+	cert, certKey := nginx.CertPaths(nginx.CurrentTLD())
 	conf := fmt.Sprintf(`server {
     listen 80;
     listen 443 ssl;
@@ -38,8 +39,7 @@ func writeProxyConf(domain, upstream string) error {
         proxy_set_header Connection "upgrade";
     }
 }
-`, domain, filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem"),
-		filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem"), upstream)
+`, domain, cert, certKey, upstream)
 	if err := os.MkdirAll(filepath.Dir(proxyConfPath(domain)), 0o755); err != nil {
 		return err
 	}

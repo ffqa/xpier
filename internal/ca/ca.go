@@ -184,12 +184,13 @@ func CmdSecure(args []string) error {
 		}
 	} else {
 		// Drop the existing self-signed cert so it gets re-signed by the CA.
-		cert, _ := nginx.CertPaths("test")
+		tld := nginx.CurrentTLD()
+		cert, _ := nginx.CertPaths(tld)
 		os.Remove(cert)
-		if err := EnsureWildcardCertSignedByCA("test"); err != nil {
+		if err := EnsureWildcardCertSignedByCA(tld); err != nil {
 			return err
 		}
-		fmt.Println("xpier CA trusted; *.test certs are now signed by it (browsers will not warn)")
+		fmt.Printf("xpier CA trusted; *.%s certs are now signed by it (browsers will not warn)\n", tld)
 	}
 	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)

@@ -56,10 +56,11 @@ func CmdInstall(args []string) error {
 	if sites, err := store.LoadSites(); err == nil {
 		nginx.WriteAllSiteConfigs(sites)
 	}
-	if err := store.WriteDnsmasqConfig("test"); err != nil {
+	tld := nginx.CurrentTLD()
+	if err := store.WriteDnsmasqConfig(tld); err != nil {
 		return err
 	}
-	if err := EnsureWildcardCert("test"); err != nil {
+	if err := EnsureWildcardCert(tld); err != nil {
 		return err
 	}
 	if err := EnsureNginxSudoers(); err != nil {
