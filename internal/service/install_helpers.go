@@ -18,7 +18,6 @@ func CurrentUser() (*user.User, error) {
 	return user.Current()
 }
 
-// store.UDPBusy reports whether something is listening on a UDP port (dnsmasq).
 // EnsureWildcardCert generates a self-signed *.test wildcard cert if missing.
 func EnsureWildcardCert(tld string) error {
 	cert, key := nginx.CertPaths(tld)

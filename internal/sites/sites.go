@@ -42,8 +42,6 @@ func siteRoot(site store.Site) string {
 	return site.Path
 }
 
-// nginx.HyperfPort returns the proxy port for a hyperf site, reading
-// config/autoload/server.php when possible.
 // CmdPark registers directories whose subdirectories become sites.
 func CmdPark(args []string) error {
 	fs := flag.NewFlagSet("park", flag.ExitOnError)
@@ -116,7 +114,7 @@ func containsString(list []string, s string) bool {
 	return false
 }
 
-// nginx.WriteAllSiteConfigs regenerates nginx configs for every registered site.
+// CmdLink registers the current directory (or a named site) as a linked site.
 func CmdLink(args []string) error {
 	fs := flag.NewFlagSet("link", flag.ExitOnError)
 	name := fs.String("name", "", "site name (default: directory name)")

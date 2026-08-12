@@ -258,8 +258,6 @@ func TestClearAppCaches(t *testing.T) {
 	}
 }
 
-var _ = strings.TrimSpace
-
 func TestCmdUpDownNoConfig(t *testing.T) {
 	homeTemp(t)
 	chdir(t, t.TempDir())

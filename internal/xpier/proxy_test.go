@@ -93,8 +93,6 @@ func TestCmdDirectoryListing(t *testing.T) {
 	}
 }
 
-var _ = os.Getwd
-
 func TestCmdLog(t *testing.T) {
 	homeTemp(t)
 	if err := cmdLog(nil); err == nil {

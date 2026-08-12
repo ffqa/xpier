@@ -3,7 +3,6 @@ package xpier
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"xpier/internal/store"
@@ -137,5 +136,3 @@ func TestSafeExtRe(t *testing.T) {
 		}
 	}
 }
-
-var _ = strings.TrimSpace

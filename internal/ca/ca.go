@@ -216,5 +216,3 @@ func CmdSecured(args []string) error {
 	}
 	return nil
 }
-
-var _ = strings.TrimSpace

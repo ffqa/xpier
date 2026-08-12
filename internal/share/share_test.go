@@ -132,8 +132,6 @@ func splitHostPort(addr string) (string, string, error) {
 	return addr[:i], addr[i+1:], nil
 }
 
-var _ = filepath.Join
-
 func TestWaitTunnelRegistered(t *testing.T) {
 	homeTemp(t)
 	log := filepath.Join(t.TempDir(), "tunnel.log")

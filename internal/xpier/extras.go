@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"xpier/internal/nginx"
 	"xpier/internal/store"
@@ -151,8 +150,6 @@ func cmdXdebug(args []string) error {
 	}
 	return nil
 }
-
-var _ = strings.TrimSpace
 
 type mailState struct {
 	PID     int    `json:"pid"`
