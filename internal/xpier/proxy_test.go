@@ -154,3 +154,29 @@ func TestMailStateRoundTrip(t *testing.T) {
 		t.Errorf("mail state = %+v", st)
 	}
 }
+
+func TestPlanExtMissingWithPHP(t *testing.T) {
+	homeTemp(t)
+	bin := phpBinFor("8.2")
+	if v := phpVersion(bin); v == "" {
+		t.Skip("php@8.2 not installed on this machine")
+	}
+	m := &store.Manifest{PHP: "8.2", Extensions: map[string]string{"__zz_not_a_real_ext__": "^1.0"}}
+	items := plan(m)
+	for _, it := range items {
+		if it.kind == "ext" && it.name == "__zz_not_a_real_ext__" {
+			if it.state != "missing" {
+				t.Errorf("fake ext should be missing, got %s", it.state)
+			}
+			return
+		}
+	}
+	t.Error("fake ext item not found in plan")
+}
+
+func TestCmdIniMissing(t *testing.T) {
+	homeTemp(t)
+	if err := cmdIni([]string{"--php", "99.9"}); err == nil {
+		t.Error("cmdIni missing php.ini should error")
+	}
+}
