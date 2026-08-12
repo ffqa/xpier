@@ -107,11 +107,13 @@ func cmdDBStop(args []string) error {
 func cmdDBCreate(args []string) error {
 	fs := flag.NewFlagSet("db:create", flag.ExitOnError)
 	svc := fs.String("db", "mysql", "database type (mysql|mariadb|postgres)")
+	user := fs.String("user", "root", "database user")
+	password := fs.String("password", "", "database password (empty = no password / socket auth)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() < 1 {
-		return fmt.Errorf("usage: xpier db:create <name> [--db mysql]")
+		return fmt.Errorf("usage: xpier db:create <name> [--db mysql] [--user root] [--password ...]")
 	}
 	name := fs.Arg(0)
 	if !store.SafeSiteNameRe.MatchString(name) {
@@ -119,11 +121,20 @@ func cmdDBCreate(args []string) error {
 	}
 	switch *svc {
 	case "mysql", "mariadb":
-		// MySQL creates the DB with the user's privileges; default brew mysql
-		// root has no password locally.
-		out, err := exec.Command("mysql", "-u", "root", "-e", "CREATE DATABASE IF NOT EXISTS `"+name+"` CHARACTER SET utf8mb4;").CombinedOutput()
+		// Default brew MySQL/MariaDB authenticate via unix socket with an
+		// empty root password; --user/--password cover password-protected
+		// setups instead of silently failing on `mysql -u root`.
+		mysqlArgs := []string{}
+		if *user != "" {
+			mysqlArgs = append(mysqlArgs, "-u", *user)
+		}
+		if *password != "" {
+			mysqlArgs = append(mysqlArgs, "-p"+*password)
+		}
+		mysqlArgs = append(mysqlArgs, "-e", "CREATE DATABASE IF NOT EXISTS `"+name+"` CHARACTER SET utf8mb4;")
+		out, err := exec.Command("mysql", mysqlArgs...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("mysql create database: %v: %s", err, out)
+			return fmt.Errorf("mysql create database: %v: %s (root 有密码?用 `xpier db:create %s --user root --password ...` 或先 `mysql -u root -p` 设置好凭据)", err, out, name)
 		}
 		fmt.Printf("created database %s (mysql)\n", name)
 	case "postgres", "pgsql", "postgresql":

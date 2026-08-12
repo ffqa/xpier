@@ -27,7 +27,7 @@
 | `xpier links` | 列出已链接站点 |
 | `xpier parked` | 列出 park 目录 |
 | `xpier site:php <site> [version]` | 查看/设置站点 PHP 版本 |
-| `xpier isolate <ver> [--site x]` / `unisolate` | 固定/解除当前站点 PHP |
+| `xpier isolate <ver> [--site x]` / `unisolate` | 固定/解除当前站点 PHP(与 `site:php` 同效,`isolate` 侧重"固定版本到站点",`site:php` 侧重"查看/设置") |
 | `xpier isolated` | 列出已固定 PHP 的站点 |
 | `xpier open [site]` / `edit [site]` | 浏览器打开 / IDE 编辑站点 |
 | `xpier site-information <site>` | 站点详情(domain/path/driver/php/root) |

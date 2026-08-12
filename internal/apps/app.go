@@ -130,7 +130,10 @@ func appRunning(ns string, name string, app store.App) bool {
 	return anyAppPortBusy(appPorts(app, s))
 }
 
-func strayAppPids(cmd string) []int {
+// strayAppPids finds processes matching app.Cmd that are NOT tracked by any
+// app state (a tracked pid belongs to a running app, not a stray) and not the
+// xpier process itself.
+func strayAppPids(ns, cmd string) []int {
 	if cmd == "" {
 		return nil
 	}
@@ -138,12 +141,22 @@ func strayAppPids(cmd string) []int {
 	if err != nil {
 		return nil
 	}
+	tracked := map[int]bool{}
+	if entries, err := os.ReadDir(filepath.Join(store.XpierHome(), "apps", ns)); err == nil {
+		for _, e := range entries {
+			if strings.HasSuffix(e.Name(), ".json") {
+				if st, err := store.LoadAppState(ns, strings.TrimSuffix(e.Name(), ".json")); err == nil {
+					tracked[st.PID] = true
+				}
+			}
+		}
+	}
 	var pids []int
 	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 		if line == "" {
 			continue
 		}
-		if pid, err := strconv.Atoi(line); err == nil {
+		if pid, err := strconv.Atoi(line); err == nil && pid != os.Getpid() && !tracked[pid] {
 			pids = append(pids, pid)
 		}
 	}
@@ -552,7 +565,7 @@ func CmdUp(args []string) error {
 				conflicts = append(conflicts, fmt.Sprintf("%s 端口 %s 已被占用", n, p))
 			}
 		}
-		if len(strayAppPids(app.Cmd)) > 0 {
+		if len(strayAppPids(ns, app.Cmd)) > 0 {
 			conflicts = append(conflicts, fmt.Sprintf("%s 存在游离进程", n))
 		}
 	}
@@ -607,7 +620,7 @@ func CmdDown(args []string) error {
 			}
 			continue
 		}
-		if pids := strayAppPids(app.Cmd); len(pids) > 0 {
+		if pids := strayAppPids(ns, app.Cmd); len(pids) > 0 {
 			killAppPids(pids)
 			removeAppNginxConf(ns, n)
 			fmt.Printf("  %s 存在游离进程（pid %v），已清理\n", n, pids)
@@ -662,7 +675,7 @@ func CmdStatus(args []string) error {
 		} else if anyAppPortBusy(appPorts(app, &store.AppState{})) {
 			state = "up"
 			untracked = true
-		} else if len(strayAppPids(app.Cmd)) > 0 {
+		} else if len(strayAppPids(ns, app.Cmd)) > 0 {
 			state = "up"
 			untracked = true
 		}

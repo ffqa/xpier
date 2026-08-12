@@ -193,12 +193,16 @@ func CmdSecure(args []string) error {
 		fmt.Printf("xpier CA trusted; *.%s certs are now signed by it (browsers will not warn)\n", tld)
 	}
 	if err := nginx.NginxReload(); err != nil {
-		fmt.Printf("[warn] nginx reload failed: %v\n", err)
+		return fmt.Errorf("nginx reload after secure failed: %w (run `sudo xpier install` first?)", err)
 	}
 	// Regenerate site configs so they pick up the freshly signed cert.
 	if sites, err := store.LoadSites(); err == nil {
-		nginx.WriteAllSiteConfigs(sites)
-		nginx.NginxReload()
+		if err := nginx.WriteAllSiteConfigs(sites); err != nil {
+			return err
+		}
+		if err := nginx.NginxReload(); err != nil {
+			return fmt.Errorf("nginx reload after secure failed: %w", err)
+		}
 	}
 	return nil
 }
