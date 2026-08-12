@@ -152,3 +152,18 @@ func TestCmdIniMissing(t *testing.T) {
 		t.Error("cmdIni missing php.ini should error")
 	}
 }
+
+func TestAdminerURL(t *testing.T) {
+	homeTemp(t)
+	s := store.DefaultSites()
+	if got := adminerURL(s, ""); got != "http://database.test/" {
+		t.Errorf("adminerURL no site = %q", got)
+	}
+	if got := adminerURL(s, "larablog"); got != "http://database.test/?db=larablog" {
+		t.Errorf("adminerURL with site = %q", got)
+	}
+	s.TLD = "dev"
+	if got := adminerURL(s, ""); got != "http://database.dev/" {
+		t.Errorf("adminerURL custom tld = %q", got)
+	}
+}

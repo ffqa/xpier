@@ -177,6 +177,16 @@ func ensureAdminerSite() error {
 	return nginx.WriteSiteNginxConfig(sites, "database")
 }
 
+// adminerURL builds the Adminer URL; an optional site name prefills the
+// database field (Laravel convention: database name == site name).
+func adminerURL(sites *store.Sites, siteName string) string {
+	u := "http://" + store.SiteDomain(sites, "database") + "/"
+	if siteName != "" {
+		u += "?db=" + siteName
+	}
+	return u
+}
+
 func cmdDB(args []string) error {
 	fs := flag.NewFlagSet("db", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
@@ -189,6 +199,9 @@ func cmdDB(args []string) error {
 	if err != nil {
 		return err
 	}
-	domain := store.SiteDomain(sites, "database")
-	return store.RunOutErr("open", "http://"+domain+"/")
+	siteName := ""
+	if fs.NArg() > 0 {
+		siteName = fs.Arg(0)
+	}
+	return store.RunOutErr("open", adminerURL(sites, siteName))
 }
