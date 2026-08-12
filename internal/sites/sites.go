@@ -151,13 +151,13 @@ func CmdLink(args []string) error {
 	// Standard Laravel/PHP sites need no dev server: nginx + php-fpm serve
 	// public/ directly. Start the site's php-fpm right away in interactive
 	// sessions (skipped under pipes/tests).
-	php := site.PHP
-	if php == "" {
-		php = nginx.DefaultPhpVersion()
+	phpVer := site.PHP
+	if phpVer == "" {
+		phpVer = nginx.DefaultPhpVersion()
 	}
 	if store.IsTTY(os.Stdout) {
-		if err := service.FpmUp(php); err != nil {
-			fmt.Printf("[warn] php-fpm %s: %v (run `xpier sites:up` later)\n", php, err)
+		if err := service.FpmUp(phpVer); err != nil {
+			fmt.Printf("[warn] php-fpm %s: %v (run `xpier sites:up` later)\n", phpVer, err)
 		}
 	}
 	fmt.Printf("linked %s -> %s (driver %s, php %s)\n", store.SiteDomain(sites, siteName), cwd, site.Driver, site.PHP)
