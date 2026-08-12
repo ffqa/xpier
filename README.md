@@ -13,7 +13,7 @@ xpier 是 macOS 上的本地 PHP 开发环境管理器(Laravel Herd / Valet 类�
 | PHP 隔离 | `xpier isolate / unisolate`, `xpier site:php`, `xpier php/composer/debug/coverage` | 按站点固定 PHP 版本,命令代理到站点 PHP |
 | 证书 | `sudo xpier secure [domain] / secured` | 本地 CA,签发 `*.test` 通配证书与多级域名证书 |
 | 反向代理 | `xpier proxy <domain> <host> / proxies / unproxy` | 代理到任意本地服务(meilisearch、docker 等) |
-| 数据库 | `xpier db:install/start/stop <svc>`, `xpier db:create`, `xpier db` | MySQL/MariaDB/Redis/Postgres + Adminer(`database.test`) |
+| 数据库 | `xpier db:install/start/stop <svc>`, `xpier db:create`, `xpier db` | MySQL/MariaDB/Redis/Postgres + 内置 Adminer(`database.<tld>`,已打补丁支持空密码本地登录) |
 | 隧道 | `xpier share [site\|--port N]`, `shares`, `share:stop` | cloudflared 快速隧道,自动探测 HTTP/HTTPS 源 |
 | 邮件 | `xpier mail:up / mail:down / mail` | Mailpit(SMTP 1025, UI 8025) |
 | 调试 | `xpier xdebug [status\|on\|off]`, `xpier tinker` | xdebug 开关、Laravel/Hyperf tinker 自动识别 |

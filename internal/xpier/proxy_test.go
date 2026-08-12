@@ -1,6 +1,7 @@
 package xpier
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -192,6 +193,19 @@ func TestEnsureAdminerSiteEmbedded(t *testing.T) {
 	}
 	if s.Sites["database"].Path != filepath.Join(store.XpierHome(), "adminer") {
 		t.Errorf("database site = %+v", s.Sites["database"])
+	}
+	// A stale deployed copy is replaced by the embedded (patched) one.
+	stale := filepath.Join(store.XpierHome(), "adminer", "index.php")
+	os.WriteFile(stale, []byte("<?php // stale"), 0o644)
+	if err := ensureAdminerSite(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(stale)
+	if bytes.Contains(data, []byte("stale")) {
+		t.Error("stale adminer copy was not synced to the embedded version")
+	}
+	if !bytes.Contains(data, []byte("xpier patch")) {
+		t.Error("deployed adminer is missing the empty-password patch")
 	}
 	// A user site named database is not overwritten.
 	reg := store.DefaultSites()

@@ -3,6 +3,7 @@ package xpier
 import (
 	_ "embed"
 
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -162,9 +163,10 @@ func ensureAdminerSite() error {
 		return err
 	}
 	index := filepath.Join(dir, "index.php")
-	if !store.FileExists(index) {
-		// Adminer is embedded in the binary (Apache-2.0 / GPL-2, see
-		// internal/xpier/adminer.php header) so `xpier db` works offline.
+	// Adminer is embedded in the binary (Apache-2.0 / GPL-2, see the file
+	// header) so `xpier db` works offline. Rewrite whenever the deployed
+	// copy differs (e.g. after an embedded patch like the empty-password one).
+	if data, err := os.ReadFile(index); err != nil || !bytes.Equal(data, adminerPHP) {
 		if err := os.WriteFile(index, adminerPHP, 0o644); err != nil {
 			return fmt.Errorf("write adminer: %w", err)
 		}

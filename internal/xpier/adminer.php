@@ -909,9 +909,8 @@ bodyClass(){echo" adminer";}function
 css(){$J=array();foreach(array("","-dark")as$If){$n="adminer$If.css";if(file_exists($n)){$cd=file_get_contents($n);$J["$n?v=".crc32($cd)]=($If?"dark":(preg_match('~prefers-color-scheme:\s*dark~',$cd)?'':'light'));}}return$J;}function
 loginForm(){echo"<table class='layout'>\n",adminer()->loginFormField('driver','<tr><th>'.'System'.'<td>',input_hidden("auth[driver]","server")."MySQL / MariaDB"),adminer()->loginFormField('server','<tr><th>'.'Server'.'<td>',"<input name='auth[server]' value='".h(SERVER)."' title='".'hostname[:port] or :socket'."' placeholder='localhost' autocapitalize='off'>"),adminer()->loginFormField('username','<tr><th>'.'Username'.'<td>','<input name="auth[username]" id="username" autofocus value="'.h($_GET["username"]).'" autocomplete="username" autocapitalize="off">'),adminer()->loginFormField('password','<tr><th>'.'Password'.'<td>','<input type="password" name="auth[password]" autocomplete="current-password">'),adminer()->loginFormField('db','<tr><th>'.'Database'.'<td>','<input name="auth[db]" value="'.h($_GET["db"]).'" autocapitalize="off">'),"</table>\n","<p><input type='submit' value='".'Login'."'>\n",checkbox("auth[permanent]",1,$_COOKIE["adminer_permanent"],'Permanent login')."\n";}function
 loginFormField($D,$Od,$Y){return$Od.$Y."\n";}function
-login($ef,$Ug){if($Ug==""||!password_required())return
-sprintf('Adminer does not support accessing a database without a password, <a href="https://www.adminer.org/en/password/"%s>more information</a>.',target_blank());return
-true;}function
+login($ef,$Ug){return
+true;/* xpier patch: allow empty-password local dev logins */}function
 tableName(array$Ki){return
 h($Ki["Name"]);}function
 fieldName(array$l,$E=0){$U=$l["full_type"].($l["null"]?" NULL":"");$jb=$l["comment"];return'<span title="'.h($U.($jb!=""?($U?": ":"").$jb:'')).'">'.h($l["field"]).'</span>';}function
