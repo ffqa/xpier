@@ -228,6 +228,10 @@ func CmdSiteCoverage(args []string) error {
 }
 
 func CmdOpen(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier open [site]    open a site in the browser")
+		return nil
+	}
 	fs := flag.NewFlagSet("open", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -246,6 +250,10 @@ func CmdOpen(args []string) error {
 }
 
 func CmdEdit(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier edit [site]    open a site in your editor")
+		return nil
+	}
 	fs := flag.NewFlagSet("edit", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err

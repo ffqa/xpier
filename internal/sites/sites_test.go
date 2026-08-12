@@ -416,3 +416,13 @@ func TestCmdPaths(t *testing.T) {
 		t.Errorf("CmdPaths = %v", err)
 	}
 }
+
+func TestCmdUseHelpFlag(t *testing.T) {
+	homeTemp(t)
+	if err := CmdUse([]string{"--help"}); err != nil {
+		t.Errorf("CmdUse --help = %v", err)
+	}
+	if err := CmdUse([]string{"-h"}); err != nil {
+		t.Errorf("CmdUse -h = %v", err)
+	}
+}

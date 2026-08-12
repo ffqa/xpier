@@ -201,6 +201,10 @@ func cmdIsolatedNode(args []string) error {
 }
 
 func cmdNode(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Println("usage: xpier node [--site x] args    run with the site's Node")
+		return nil
+	}
 	siteName, passthrough := sitepkg.ExtractSiteFlag(args)
 	sites, err := store.LoadSites()
 	if err != nil {

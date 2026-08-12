@@ -153,6 +153,10 @@ func EnsureDomainCert(domain string) error {
 // signs a per-domain cert (e.g. `xpier secure img.test28`), otherwise it
 // signs the *.test wildcard cert.
 func CmdSecure(args []string) error {
+	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
+		fmt.Println("usage: sudo xpier secure [domain]    trust CA + sign certs")
+		return nil
+	}
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("`xpier secure` must run as root: use `sudo xpier secure`")
 	}

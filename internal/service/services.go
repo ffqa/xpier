@@ -278,6 +278,10 @@ func startSiteFpms() error {
 
 var knownServices = []string{"mysql", "mariadb", "redis", "postgresql@14", "postgresql@16", "mailpit", "cloudflared"}
 
+func isHelpArg(args []string) bool {
+	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
+}
+
 // CmdServicesAvailable lists the services xpier can install via brew and
 // whether each is already installed (Herd Pro's services:available).
 func CmdServicesAvailable(args []string) error {
@@ -310,6 +314,10 @@ func CmdServicesVersions(args []string) error {
 // CmdServicesCreate installs a service via brew and starts it
 // (lightweight stand-in for Herd Pro's managed database services).
 func CmdServicesCreate(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier services:create <mysql|mariadb|redis|postgres|mailpit>")
+		return nil
+	}
 	if len(args) < 1 {
 		return fmt.Errorf("usage: xpier services:create <mysql|mariadb|redis|postgres>")
 	}
@@ -340,6 +348,10 @@ func CmdServicesCreate(args []string) error {
 
 // CmdPhpInstall installs a PHP version via brew (shivammathur tap).
 func CmdPhpInstall(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier php:install <8.2|8.3|...>    install a PHP version via brew")
+		return nil
+	}
 	if len(args) < 1 {
 		return fmt.Errorf("usage: xpier php:install <8.2|8.3|...>")
 	}
@@ -358,6 +370,10 @@ func CmdPhpInstall(args []string) error {
 // CmdPhpUpdate upgrades an installed PHP version via brew (default: the
 // global default version).
 func CmdPhpUpdate(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier php:update [ver]    upgrade an installed PHP version")
+		return nil
+	}
 	ver := nginx.DefaultPhpVersion()
 	if len(args) > 0 {
 		ver = args[0]

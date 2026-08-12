@@ -945,6 +945,10 @@ func tailFile(path string, follow bool, prefix string) error {
 }
 
 // parseLogFlags extracts -f/--follow, leaving the rest untouched.
+func isHelpArg(args []string) bool {
+	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
+}
+
 func parseLogFlags(args []string) (follow bool, rest []string) {
 	for _, a := range args {
 		if a == "-f" || a == "--follow" {
@@ -958,6 +962,10 @@ func parseLogFlags(args []string) (follow bool, rest []string) {
 
 // CmdLog tails a single built-in service log (global, no project needed).
 func CmdLog(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier log <nginx|dnsmasq|php-fpm|mailpit> [-f]")
+		return nil
+	}
 	follow, rest := parseLogFlags(args)
 	if len(rest) < 1 {
 		return fmt.Errorf("usage: xpier log <nginx|dnsmasq|php-fpm|mailpit> [-f] (project app logs: `xpier app:log <app>`)")
@@ -972,6 +980,10 @@ func CmdLog(args []string) error {
 
 // CmdAppLog tails one running app's log in the current project directory.
 func CmdAppLog(args []string) error {
+	if isHelpArg(args) {
+		fmt.Println("usage: xpier app:log <app> [-f]")
+		return nil
+	}
 	follow, rest := parseLogFlags(args)
 	if len(rest) < 1 {
 		return fmt.Errorf("usage: xpier app:log <app> [-f]")
