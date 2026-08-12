@@ -114,7 +114,7 @@ func TestWriteSiteNginxConfigLaravel(t *testing.T) {
 	conf := string(data)
 	for _, want := range []string{
 		"server_name larablog.test;",
-		"root /srv/larablog/public;",
+		"root \"/srv/larablog/public\";",
 		"fastcgi_pass unix:" + filepath.Join(store.XpierHome(), "run", "php-fpm-8.2.sock") + ";",
 		"try_files $uri $uri/ /index.php?$query_string;",
 		"ssl_certificate",

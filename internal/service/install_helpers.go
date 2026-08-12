@@ -4,19 +4,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"strings"
 	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
-
-func CurrentUser() (*user.User, error) {
-	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" && os.Geteuid() == 0 {
-		return user.Lookup(sudoUser)
-	}
-	return user.Current()
-}
 
 // EnsureWildcardCert generates a self-signed *.test wildcard cert if missing.
 func EnsureWildcardCert(tld string) error {
@@ -96,7 +88,7 @@ func DnsmasqBin() string {
 // EnsureNginxSudoers writes a passwordless sudoers entry so the user can
 // reload the root-owned nginx master without typing a password.
 func EnsureNginxSudoers() error {
-	u, err := CurrentUser()
+	u, err := store.CurrentUser()
 	if err != nil {
 		return err
 	}

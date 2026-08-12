@@ -166,7 +166,7 @@ func firstNonHeaderLine(out string) string {
 // configs written during `sudo xpier install` would otherwise be root-owned
 // and uneditable by the user (nginx.conf, dnsmasq.conf, ...).
 func ChownHerdyHomeToUser() error {
-	u, err := CurrentUser()
+	u, err := store.CurrentUser()
 	if err != nil {
 		return err
 	}

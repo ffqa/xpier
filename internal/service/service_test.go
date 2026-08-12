@@ -233,7 +233,7 @@ func TestCmdServicesStopStartEmpty(t *testing.T) {
 
 func TestCurrentUser(t *testing.T) {
 	homeTemp(t)
-	u, err := CurrentUser()
+	u, err := store.CurrentUser()
 	if err != nil || u.Username == "" {
 		t.Errorf("CurrentUser = %+v %v", u, err)
 	}

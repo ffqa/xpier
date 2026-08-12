@@ -158,7 +158,7 @@ func WriteSiteNginxConfigWithNames(sites *store.Sites, name string, extra []stri
 	fmt.Fprintf(&conf, "    server_name %s;\n", serverNames)
 	fmt.Fprintf(&conf, "    ssl_certificate     %s;\n", cert)
 	fmt.Fprintf(&conf, "    ssl_certificate_key %s;\n", certKey)
-	fmt.Fprintf(&conf, "    root %s;\n", root)
+	fmt.Fprintf(&conf, "    root \"%s\";\n", root)
 	conf.WriteString("    index index.php index.html;\n")
 	if site.Driver == "hyperf" {
 		port := HyperfPort(site)

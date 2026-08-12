@@ -2,6 +2,7 @@ package xpier
 
 import (
 	"fmt"
+	"xpier/internal/apps"
 	"xpier/internal/nginx"
 	"xpier/internal/sites"
 	"xpier/internal/store"
@@ -18,7 +19,18 @@ func cmdRefresh(args []string) error {
 	if err := nginx.WriteAllSiteConfigs(s); err != nil {
 		return err
 	}
-	if err := nginx.WriteDefaultSiteConfig(); err != nil {
+	// Rebuild proxy and app configs too, so cert paths point at the current
+	// home after a migration.
+	proxies, err := store.LoadProxies()
+	if err != nil {
+		return err
+	}
+	for domain, upstream := range proxies {
+		if err := writeProxyConf(domain, upstream); err != nil {
+			return err
+		}
+	}
+	if err := apps.RefreshNginxConfs(); err != nil {
 		return err
 	}
 	if err := nginx.NginxReload(); err != nil {

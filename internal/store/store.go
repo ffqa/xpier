@@ -231,7 +231,7 @@ func (m *Manifest) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return writeFileAtomic(path, data, 0o644)
 }
 
 func LoadManifest(path string) (*Manifest, error) {
@@ -263,7 +263,7 @@ func (l *Lock) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	return writeFileAtomic(path, data, 0o644)
 }
 
 // --- sites registry ---
@@ -303,7 +303,7 @@ func (s *Sites) Save() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(SitesPath(), data, 0o644)
+	return writeFileAtomic(SitesPath(), data, 0o644)
 }
 
 // --- proxies registry ---
@@ -336,7 +336,7 @@ func SaveProxies(m map[string]string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ProxiesPath(), data, 0o644)
+	return writeFileAtomic(ProxiesPath(), data, 0o644)
 }
 
 // --- app state ---
@@ -369,7 +369,7 @@ func SaveAppState(s *AppState, ns string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(AppStatePath(ns, s.Name), data, 0o644)
+	return writeFileAtomic(AppStatePath(ns, s.Name), data, 0o644)
 }
 
 // EnsureBrewPackage prompts to install a missing brew package and installs it
@@ -451,7 +451,7 @@ address=/.%s/127.0.0.1
 	if err := os.MkdirAll(filepath.Dir(DnsmasqConfPath()), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(DnsmasqConfPath(), []byte(conf), 0o644)
+	return writeFileAtomic(DnsmasqConfPath(), []byte(conf), 0o644)
 }
 
 // paintWord maps a status word to its ANSI color: up=green, down=red,
@@ -485,6 +485,31 @@ func Paint(s string) string {
 		return s
 	}
 	return paintWord(s)
+}
+
+// writeFileAtomic writes data to path via a temp file + rename so a crash
+// mid-write never leaves a truncated registry behind.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 // UpDown formats a boolean as the up/down string used by status tables.

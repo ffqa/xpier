@@ -248,6 +248,39 @@ func removeAppNginxConf(ns, name string) {
 	os.Remove(appNginxConfPath(ns, name))
 }
 
+// RefreshNginxConfs regenerates app proxy configs from saved app states
+// (used after the xpier home directory moved, so cert paths are current).
+func RefreshNginxConfs() error {
+	root := filepath.Join(store.XpierHome(), "apps")
+	nsEntries, err := os.ReadDir(root)
+	if err != nil {
+		return nil // no apps provisioned yet
+	}
+	for _, ns := range nsEntries {
+		if !ns.IsDir() {
+			continue
+		}
+		states, err := os.ReadDir(filepath.Join(root, ns.Name()))
+		if err != nil {
+			continue
+		}
+		for _, f := range states {
+			if !strings.HasSuffix(f.Name(), ".json") {
+				continue
+			}
+			name := strings.TrimSuffix(f.Name(), ".json")
+			st, err := store.LoadAppState(ns.Name(), name)
+			if err != nil {
+				continue
+			}
+			if err := writeAppNginxConf(ns.Name(), name, store.App{Domain: st.Domain, Port: st.Port, Ports: st.Ports}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func appURL(app store.App, s *store.AppState) string {
 	if app.Domain != "" {
 		return "http://" + app.Domain + "/"

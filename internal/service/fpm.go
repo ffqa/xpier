@@ -57,7 +57,7 @@ func FpmRunning(ver string) bool {
 }
 
 func WriteFpmConf(ver string) error {
-	user, err := CurrentUser()
+	user, err := store.CurrentUser()
 	if err != nil {
 		return err
 	}
