@@ -180,7 +180,15 @@ func ensureAdminerSite() error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	return nginx.WriteSiteNginxConfig(sites, "database")
+	if err := nginx.WriteSiteNginxConfig(sites, "database"); err != nil {
+		return err
+	}
+	// The config only takes effect after a reload; without this the browser
+	// opens database.<tld> to a 404 (default server).
+	if err := nginx.NginxReload(); err != nil {
+		fmt.Printf("[warn] nginx reload failed: %v (run `sudo xpier install` to fix sudoers, then `xpier db` again)\n", err)
+	}
+	return nil
 }
 
 // adminerURL builds the Adminer URL; an optional site name prefills the
