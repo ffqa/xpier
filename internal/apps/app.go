@@ -944,9 +944,8 @@ func tailFile(path string, follow bool, prefix string) error {
 	return nil
 }
 
-func CmdLog(args []string) error {
-	follow := false
-	rest := make([]string, 0, len(args))
+// parseLogFlags extracts -f/--follow, leaving the rest untouched.
+func parseLogFlags(args []string) (follow bool, rest []string) {
 	for _, a := range args {
 		if a == "-f" || a == "--follow" {
 			follow = true
@@ -954,92 +953,75 @@ func CmdLog(args []string) error {
 			rest = append(rest, a)
 		}
 	}
+	return follow, rest
+}
+
+// CmdLog tails a single built-in service log (global, no project needed).
+func CmdLog(args []string) error {
+	follow, rest := parseLogFlags(args)
 	if len(rest) < 1 {
-		return fmt.Errorf("usage: xpier log <app|nginx|dnsmasq|php-fpm|mailpit> [-f]")
+		return fmt.Errorf("usage: xpier log <nginx|dnsmasq|php-fpm|mailpit> [-f] (project app logs: `xpier app:log <app>`)")
 	}
 	name := rest[0]
-	if path := serviceLogPath(name); path != "" {
-		return tailFile(path, follow, "")
+	path := serviceLogPath(name)
+	if path == "" {
+		return fmt.Errorf("unknown service %q (nginx|dnsmasq|php-fpm|mailpit); for app logs use `xpier app:log %s`", name, name)
+	}
+	return tailFile(path, follow, "")
+}
+
+// CmdAppLog tails one running app's log in the current project directory.
+func CmdAppLog(args []string) error {
+	follow, rest := parseLogFlags(args)
+	if len(rest) < 1 {
+		return fmt.Errorf("usage: xpier app:log <app> [-f]")
 	}
 	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
 	ns := cfg.Namespace
+	name := rest[0]
 	s, err := store.LoadAppState(ns, name)
 	if err != nil {
-		return fmt.Errorf("app %s not running (start with `xpier up`); or use a service log: nginx|dnsmasq|php-fpm|mailpit", name)
+		return fmt.Errorf("app %s not running (start with `xpier up`)", name)
 	}
-	return tailFile(s.Log, follow, "")
+	path := s.Log
+	if path == "" || !store.FileExists(path) {
+		path = store.AppLogPath(ns, name)
+	}
+	return tailFile(path, follow, "")
 }
 
 var appLogColors = []string{"\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[35m", "\x1b[34m"}
 
 // tailAllLogs tails the running apps plus nginx + php-fpm service logs
 // (Herd's `herd logs` shows everything, nginx included).
-func tailAllLogs() error {
-	cfg, _, err := LoadAppConfig()
-	if err != nil {
-		return err
-	}
-	ns := cfg.Namespace
-	names := make([]string, 0, len(cfg.Apps))
-	for n, app := range cfg.Apps {
-		if appRunning(ns, n, app) {
-			names = append(names, n)
+type logEntry struct {
+	path   string
+	prefix string
+}
+
+func serviceLogEntries() []logEntry {
+	var out []logEntry
+	for _, svc := range []string{"nginx", "dnsmasq", "php-fpm", "mailpit"} {
+		if p := serviceLogPath(svc); p != "" && store.FileExists(p) {
+			out = append(out, logEntry{p, "[" + svc + "]"})
 		}
 	}
-	sort.Strings(names)
-	var logs []string
-	for _, n := range names {
-		if s, err := store.LoadAppState(ns, n); err == nil {
-			path := s.Log
-			if path == "" || !store.FileExists(path) {
-				path = store.AppLogPath(ns, n)
-			}
-			if store.FileExists(path) {
-				logs = append(logs, path)
-			}
-		}
-	}
-	// Service logs, best effort (files may not exist yet).
-	svcPrefixes := []struct{ path, prefix string }{
-		{serviceLogPath("nginx"), "[nginx]"},
-		{serviceLogPath("php-fpm"), "[php-fpm]"},
-	}
-	for _, sp := range svcPrefixes {
-		if sp.path != "" && store.FileExists(sp.path) {
-			logs = append(logs, sp.path)
-			_ = sp.prefix
-		}
-	}
-	if len(logs) == 0 {
-		return fmt.Errorf("no logs to tail (start apps with `xpier up`, or check service logs)")
+	return out
+}
+
+// tailEntries tails the given log files concurrently with colored prefixes.
+func tailEntries(entries []logEntry) error {
+	if len(entries) == 0 {
+		return fmt.Errorf("no logs to tail (service logs may not exist yet)")
 	}
 	lineCh := make(chan string, 64)
 	var wg sync.WaitGroup
 	started := 0
-	for _, path := range logs {
-		prefix := ""
-		for _, sp := range svcPrefixes {
-			if sp.path == path {
-				prefix = sp.prefix
-			}
-		}
-		if prefix == "" {
-			for _, n := range names {
-				if st, err := store.LoadAppState(ns, n); err == nil {
-					path2 := st.Log
-					if path2 == "" || !store.FileExists(path2) {
-						path2 = store.AppLogPath(ns, n)
-					}
-					if path2 == path {
-						prefix = "[" + n + "]"
-					}
-				}
-			}
-		}
-		cmd := exec.Command("tail", "-f", "-n", "0", path)
+	for _, e := range entries {
+		cmd := exec.Command("tail", "-f", "-n", "0", e.path)
 		cmd.Stderr = os.Stderr
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
@@ -1060,7 +1042,7 @@ func tailAllLogs() error {
 			for sc.Scan() {
 				lineCh <- fmt.Sprintf("%s%s\x1b[0m %s", color, name, sc.Text())
 			}
-		}(path, prefix, stdout)
+		}(e.path, e.prefix, stdout)
 	}
 	if started == 0 {
 		return fmt.Errorf("no logs could be tailed")
@@ -1075,10 +1057,51 @@ func tailAllLogs() error {
 	return nil
 }
 
+// tailServiceLogs tails the global service logs (nginx, dnsmasq, php-fpm,
+// mailpit) - usable from any directory.
+func tailServiceLogs() error {
+	return tailEntries(serviceLogEntries())
+}
+
+// tailAllLogs tails service logs plus the current project's app logs.
+func tailAllLogs() error {
+	entries := serviceLogEntries()
+	if cfg, _, err := LoadAppConfig(); err == nil {
+		ns := cfg.Namespace
+		for n, app := range cfg.Apps {
+			if !appRunning(ns, n, app) {
+				continue
+			}
+			path := store.AppLogPath(ns, n)
+			if s, err := store.LoadAppState(ns, n); err == nil {
+				path = s.Log
+				if path == "" || !store.FileExists(path) {
+					path = store.AppLogPath(ns, n)
+				}
+			}
+			if store.FileExists(path) {
+				entries = append(entries, logEntry{path, "[" + n + "]"})
+			}
+		}
+	}
+	return tailEntries(entries)
+}
+
+// CmdLogsAll tails service logs (global view, no project needed). With
+// "all" it also includes the current project's running app logs.
 func CmdLogsAll(args []string) error {
 	if len(args) > 0 && args[0] == "all" {
 		return tailAllLogs()
 	}
+	return tailServiceLogs()
+}
+
+// CmdAppLogsAll tails the current project's running apps (project-scoped).
+func CmdAppLogsAll(args []string) error {
+	return tailAppLogs()
+}
+
+func tailAppLogs() error {
 	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err

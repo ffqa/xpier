@@ -347,13 +347,19 @@ func TestProcGroupOf(t *testing.T) {
 	}
 }
 
-func TestCmdLogsAllNoRunningApps(t *testing.T) {
+func TestCmdAppLogsAllProjectScoped(t *testing.T) {
 	homeTemp(t)
 	dir := t.TempDir()
 	chdir(t, dir)
 	writeFile(t, filepath.Join(dir, "dev.yaml"), "apps:\n  web:\n    dir: /x\n    cmd: npm run dev\n")
-	if err := CmdLogsAll(nil); err == nil || !strings.Contains(err.Error(), "no apps running") {
-		t.Errorf("CmdLogsAll no running = %v", err)
+	// Project-scoped view requires a config and a running app.
+	if err := CmdAppLogsAll(nil); err == nil {
+		t.Error("CmdAppLogsAll with no running apps should error")
+	}
+	// Bare `logs` is the global service view and works with no project at all.
+	chdir(t, t.TempDir())
+	if err := CmdLogsAll(nil); err == nil {
+		t.Error("CmdLogsAll with no service logs should error")
 	}
 }
 

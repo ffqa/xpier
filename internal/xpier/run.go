@@ -41,10 +41,14 @@ func Run(args []string) error {
 		return apps.CmdStart(args[1:])
 	case "restart", "app:restart":
 		return apps.CmdRestart(args[1:])
-	case "log", "app:log":
+	case "log":
 		return apps.CmdLog(args[1:])
-	case "logs", "app:logs":
+	case "logs":
 		return apps.CmdLogsAll(args[1:])
+	case "app:log":
+		return apps.CmdAppLog(args[1:])
+	case "app:logs":
+		return apps.CmdAppLogsAll(args[1:])
 	case "url", "app:url":
 		return apps.CmdURL(args[1:])
 	case "install":

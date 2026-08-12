@@ -14,8 +14,9 @@ Apps (multi-project orchestration, from dev.yaml / xpier.yaml apps):
   xpier down / app:down                  stop all apps and clean nginx mappings
   xpier restart <app> / app:restart [--force]   kill + start one app (--force clears compiled caches)
   xpier status                           pins, lock, and app stack table
-  xpier log <app|svc> / app:log [-f]     one app or service log (nginx, dnsmasq, php-fpm, mailpit)
-  xpier logs / app:logs [all]            all app logs together (all = + service logs)
+  xpier app:log <app> [-f] / app:logs   project app log / all project app logs
+  xpier log <svc> [-f]                  one service log (nginx, dnsmasq, php-fpm, mailpit)
+  xpier logs [all]                      service logs (global; all = + project app logs)
   xpier url [app] / app:url              show app URLs
 
 Sites & Projects:
