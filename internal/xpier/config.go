@@ -52,6 +52,7 @@ func cmdInit(args []string) error {
 	php := fs.String("php", "", "pin PHP version, e.g. 8.2")
 	runtime := fs.String("runtime", "", "runtime (fpm | hyperf | swoole | frankenphp)")
 	local := fs.Bool("local", false, "write xpier.yaml into the current directory instead of ~/.xpier (commit it to git if you want it versioned)")
+	force := fs.Bool("force", false, "overwrite an existing manifest with the template")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -78,8 +79,8 @@ func cmdInit(args []string) error {
 			return err
 		}
 	}
-	if _, err := os.Stat(manifestPath); err == nil {
-		return fmt.Errorf("%s already exists", manifestPath)
+	if _, err := os.Stat(manifestPath); err == nil && !*force {
+		return fmt.Errorf("%s already exists (use --force to overwrite with the template)", manifestPath)
 	}
 	rt := "fpm"
 	if *runtime != "" {

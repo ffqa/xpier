@@ -182,3 +182,24 @@ func TestInitManifestTemplatePinsPHP(t *testing.T) {
 		t.Errorf("pinned php missing:\n%s", data)
 	}
 }
+
+func TestCmdInitForce(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	old, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(old)
+	if err := cmdInit([]string{"."}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmdInit([]string{"."}); err == nil {
+		t.Error("second init without --force should error")
+	}
+	if err := cmdInit([]string{".", "--force", "--php", "8.4"}); err != nil {
+		t.Errorf("init --force = %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, store.ManifestName))
+	if !strings.Contains(string(data), `php: "8.4"`) {
+		t.Errorf("force template missing pin:\n%s", data)
+	}
+}
