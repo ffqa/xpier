@@ -240,5 +240,6 @@ func CmdSecured(args []string) error {
 			fmt.Printf("  %-30s http://%s\n", store.SiteDomain(sites, name), store.SiteDomain(sites, name))
 		}
 	}
+	fmt.Println("sites listen on 80+443 by default (self-signed wildcard); `sudo xpier secure` signs a trusted cert to silence browser warnings")
 	return nil
 }
