@@ -133,6 +133,12 @@ func applyPlan(items []planItem) error {
 			continue
 		}
 		fmt.Println("-> " + it.command)
+		switch {
+		case strings.Contains(it.command, "shivammathur/extensions"):
+			store.BrewTrustTap("shivammathur/extensions")
+		case strings.Contains(it.command, "shivammathur/php"):
+			store.BrewTrustTap("shivammathur/php")
+		}
 		if err := store.RunOutLive("sh", "-c", it.command); err != nil {
 			return fmt.Errorf("%s failed: %w", it.command, err)
 		}

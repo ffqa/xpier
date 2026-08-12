@@ -419,6 +419,17 @@ var SafeSiteNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 var SafePhpRe = regexp.MustCompile(`^\d+\.\d+$`)
 
+// BrewTrustTap marks a third-party tap trusted (Homebrew's newer
+// security model refuses untrusted tap formulae). No-op on brew versions
+// that predate the trust command.
+func BrewTrustTap(tap string) error {
+	err := RunOutLive("brew", "trust", tap)
+	if err != nil && strings.Contains(err.Error(), "Unknown command") {
+		return nil
+	}
+	return err
+}
+
 // RunOutLive runs a command with stdin/stdout/stderr attached so long
 // installs (brew) show their progress instead of buffering it.
 func RunOutLive(name string, args ...string) error {

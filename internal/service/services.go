@@ -364,6 +364,10 @@ func CmdExtInstall(args []string) error {
 	if !safeExtNameRe.MatchString(ext) {
 		return fmt.Errorf("invalid extension name %q", ext)
 	}
+	// Homebrew 2026+ refuses untrusted tap formulae; trust it first.
+	if err := store.BrewTrustTap("shivammathur/extensions"); err != nil {
+		fmt.Println("[warn] brew trust shivammathur/extensions: " + err.Error())
+	}
 	// Tap may already exist; failure is not fatal (brew install would tap it too).
 	if err := store.RunOutLive("brew", "tap", "shivammathur/extensions"); err != nil {
 		fmt.Println("[warn] tap shivammathur/extensions: " + err.Error())
@@ -389,6 +393,9 @@ func CmdPhpInstall(args []string) error {
 	if !store.SafePhpRe.MatchString(ver) {
 		return fmt.Errorf("invalid php version %q", ver)
 	}
+	if err := store.BrewTrustTap("shivammathur/php"); err != nil {
+		fmt.Println("[warn] brew trust shivammathur/php: " + err.Error())
+	}
 	fmt.Printf("installing php@%s via brew (progress below)...\n", ver)
 	if err := store.RunOutLive("brew", "install", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew install php@%s failed: %w (run it manually to see the full log)", ver, err)
@@ -410,6 +417,9 @@ func CmdPhpUpdate(args []string) error {
 	}
 	if !store.SafePhpRe.MatchString(ver) {
 		return fmt.Errorf("invalid php version %q", ver)
+	}
+	if err := store.BrewTrustTap("shivammathur/php"); err != nil {
+		fmt.Println("[warn] brew trust shivammathur/php: " + err.Error())
 	}
 	fmt.Printf("upgrading php@%s via brew (progress below)...\n", ver)
 	if err := store.RunOutLive("brew", "upgrade", "shivammathur/php/php@"+ver); err != nil {
