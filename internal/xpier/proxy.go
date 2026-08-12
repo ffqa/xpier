@@ -40,6 +40,9 @@ func writeProxyConf(domain, upstream string) error {
 }
 `, domain, filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem"),
 		filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem"), upstream)
+	if err := os.MkdirAll(filepath.Dir(proxyConfPath(domain)), 0o755); err != nil {
+		return err
+	}
 	return os.WriteFile(proxyConfPath(domain), []byte(conf), 0o644)
 }
 

@@ -80,7 +80,10 @@ func CmdPark(args []string) error {
 	if err := nginx.WriteAllSiteConfigs(sites); err != nil {
 		return err
 	}
-	return nginx.NginxReload()
+	if err := nginx.NginxReload(); err != nil {
+		fmt.Printf("[warn] nginx reload failed: %v (run `sudo xpier install` first?)\n", err)
+	}
+	return nil
 }
 
 // SyncParked auto-registers immediate subdirectories of parked paths.

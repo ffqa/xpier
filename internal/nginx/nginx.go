@@ -55,6 +55,9 @@ http {
     include %s/*.conf;
 }
 `, user.Username, NginxHome(), NginxHome(), filepath.Join(store.BrewPrefix(), "etc", "nginx", "mime.types"), NginxConfDir())
+	if err := os.MkdirAll(NginxHome(), 0o755); err != nil {
+		return err
+	}
 	return os.WriteFile(filepath.Join(NginxHome(), "nginx.conf"), []byte(conf), 0o644)
 }
 
@@ -213,6 +216,9 @@ func WriteDefaultSiteConfig() error {
     return 404;
 }
 `, cert, certKey)
+	if err := os.MkdirAll(NginxConfDir(), 0o755); err != nil {
+		return err
+	}
 	return os.WriteFile(filepath.Join(NginxConfDir(), "00-default.conf"), []byte(conf), 0o644)
 }
 
