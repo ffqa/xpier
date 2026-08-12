@@ -2,6 +2,7 @@ package xpier
 
 import (
 	"errors"
+	"fmt"
 
 	"xpier/internal/apps"
 	"xpier/internal/ca"
@@ -152,6 +153,9 @@ func Run(args []string) error {
 		return cmdIni(args[1:])
 	case "help", "-h", "--help":
 		usage()
+		return nil
+	case "--version", "-v":
+		fmt.Printf("xpier %s\n", Version)
 		return nil
 	default:
 		usage()

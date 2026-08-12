@@ -136,3 +136,12 @@ func homeTemp(t *testing.T) {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())
 }
+
+func TestVersionFlag(t *testing.T) {
+	homeTemp(t)
+	for _, cmd := range []string{"--version", "-v"} {
+		if err := Run([]string{cmd}); err != nil {
+			t.Errorf("Run(%q) = %v", cmd, err)
+		}
+	}
+}

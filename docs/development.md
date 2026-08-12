@@ -45,11 +45,16 @@ store ← nginx ← ca / apps / sites ← service ← share
 ## 发布
 
 ```bash
+VERSION=v0.1.0
+LDFLAGS="-X xpier/internal/xpier.Version=$VERSION"
+
 # 通用二进制(Intel + Apple Silicon)
-GOOS=darwin GOARCH=amd64 go build -o dist/xpier-darwin-amd64 .
-GOOS=darwin GOARCH=arm64 go build -o dist/xpier-darwin-arm64 .
+GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/xpier-darwin-amd64 .
+GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/xpier-darwin-arm64 .
 lipo -create -output dist/xpier dist/xpier-darwin-amd64 dist/xpier-darwin-arm64
 ```
+
+不带 ldflags 时 `xpier --version` 显示 `dev`。
 
 发布包包含:README.md、LICENSE、docs/。安装脚本建议:
 

@@ -109,3 +109,4 @@
 | `xpier forget` | 把当前目录从 parked/站点移除 |
 | `xpier fetch-share-url` | (占位)隧道 URL 由 share 进程输出 |
 | `xpier help` | 帮助 |
+| `xpier --version` / `-v` | 显示版本号(构建时经 `-ldflags "-X xpier/internal/xpier.Version=vX.Y.Z"` 注入) |

@@ -5,7 +5,7 @@ import (
 )
 
 func usage() {
-	fmt.Println(`xpier - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
+	fmt.Printf(`xpier %s - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
 
 Stack (multi-project orchestration, from dev.yaml / xpier.yaml apps):
   xpier up                              start ALL apps (refuses if any already running)
@@ -50,5 +50,6 @@ Extras:
   xpier tinker / directory-listing / forget   dev utilities
   xpier isolate-node <ver> / node       per-app node version via nvm
   xpier tld [x] / loopback [x]          get/set TLD / loopback
-  xpier completion [bash|zsh]           shell completion`)
+  xpier completion [bash|zsh]           shell completion
+  xpier --version / -v                  show version`, Version)
 }
