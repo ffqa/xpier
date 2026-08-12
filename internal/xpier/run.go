@@ -67,6 +67,10 @@ func Run(args []string) error {
 		return sites.CmdUnsecure(args[1:])
 	case "php:list":
 		return service.CmdPhpList(args[1:])
+	case "php:install":
+		return service.CmdPhpInstall(args[1:])
+	case "php:update":
+		return service.CmdPhpUpdate(args[1:])
 	case "link":
 		return sites.CmdLink(args[1:])
 	case "unlink":

@@ -320,20 +320,22 @@ func CmdTLD(args []string) error {
 		if !store.SafeSiteNameRe.MatchString(tld) {
 			return fmt.Errorf("invalid tld %q", tld)
 		}
-		sites.TLD = tld
-		if err := sites.Save(); err != nil {
+		// Write the new wildcard cert + dnsmasq config BEFORE persisting the
+		// TLD, so a failure (openssl, disk) cannot leave a half-applied TLD.
+		if err := service.EnsureWildcardCert(tld); err != nil {
 			return err
 		}
 		if err := store.WriteDnsmasqConfig(tld); err != nil {
+			return err
+		}
+		sites.TLD = tld
+		if err := sites.Save(); err != nil {
 			return err
 		}
 		// dnsmasq only reads its config at startup; kickstart applies the new
 		// wildcard immediately (requires sudoers launchctl or sudo).
 		if _, err := store.RunOut("sudo", "-n", "launchctl", "kickstart", "-k", "system/com.xpier.dnsmasq"); err != nil {
 			fmt.Println("[warn] dnsmasq not restarted (needs sudo): run `sudo xpier service dnsmasq restart` to apply DNS")
-		}
-		if err := service.EnsureWildcardCert(tld); err != nil {
-			return err
 		}
 		if err := nginx.WriteAllSiteConfigs(sites); err != nil {
 			return err

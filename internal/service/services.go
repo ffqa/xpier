@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -272,6 +273,41 @@ func startSiteFpms() error {
 			fmt.Printf("[warn] %v\n", err)
 		}
 	}
+	return nil
+}
+
+// CmdPhpInstall installs a PHP version via brew (shivammathur tap).
+func CmdPhpInstall(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: xpier php:install <8.2|8.3|...>")
+	}
+	ver := args[0]
+	if !store.SafePhpRe.MatchString(ver) {
+		return fmt.Errorf("invalid php version %q", ver)
+	}
+	out, err := exec.Command("brew", "install", "shivammathur/php/php@"+ver).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("brew install php@%s: %v: %s", ver, err, out)
+	}
+	fmt.Printf("php@%s installed\n", ver)
+	return nil
+}
+
+// CmdPhpUpdate upgrades an installed PHP version via brew (default: the
+// global default version).
+func CmdPhpUpdate(args []string) error {
+	ver := nginx.DefaultPhpVersion()
+	if len(args) > 0 {
+		ver = args[0]
+	}
+	if !store.SafePhpRe.MatchString(ver) {
+		return fmt.Errorf("invalid php version %q", ver)
+	}
+	out, err := exec.Command("brew", "upgrade", "shivammathur/php/php@"+ver).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("brew upgrade php@%s: %v: %s", ver, err, out)
+	}
+	fmt.Printf("php@%s upgraded\n", ver)
 	return nil
 }
 

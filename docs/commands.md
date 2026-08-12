@@ -11,8 +11,8 @@
 | `xpier down` / `app:down` | 停止全部 apps 并清理 nginx 映射 |
 | `xpier start <app>` / `app:start` [--force] | 启动单个 app;`--force` = 重启并清编译缓存 |
 | `xpier restart <app> [--force]` | kill + 重启单个 app |
-| `xpier log <app>` / `app:log` [-f] | 查看单个 app 日志(可 -f 跟随) |
-| `xpier logs` | 所有 app 日志一起看 |
+| `xpier app:log <app>` [-f] | 查看当前项目单个 app 日志(可 -f 跟随) |
+| `xpier app:logs` | 当前项目所有 app 日志一起看 |
 | `xpier url [app]` | 显示 app URL |
 | `xpier status` | 项目 pins、lock、app 栈表格 |
 
@@ -24,6 +24,11 @@
 | `xpier unlink [name]` | 移除站点 |
 | `xpier park <dir> [...]` | 注册目录,其下每个子目录自动成为站点 |
 | `xpier sites` | 站点总览(nginx/dnsmasq 状态 + 各站点 fpm 状态) |
+| `xpier paths` | 列出所有项目路径(parked 目录 + 站点路径) |
+| `xpier which` / `which-php` | 当前站点 PHP 版本 / PHP 二进制路径 |
+| `xpier use [8.3]` | 查看/设置全局默认 PHP 版本 |
+| `xpier php:list` / `php:install <ver>` / `php:update [ver]` | 列出/安装/升级 PHP 版本 |
+| `xpier unsecure <site>` | 站点降级为纯 http(`secure <site>` 恢复) |
 | `xpier sites:up / sites:down` | 启动/停止所有站点所需 php-fpm |
 | `xpier links` | 列出已链接站点 |
 | `xpier parked` | 列出 park 目录 |
@@ -56,6 +61,7 @@
 | 命令 | 说明 |
 |---|---|
 | `sudo xpier install` | 一次性安装:nginx+dnsmasq 守护进程、证书、sudoers、DNS |
+| `xpier log <svc>` / `logs [all]` | 服务日志(nginx/dnsmasq/php-fpm/mailpit);`all` 叠加项目 app 日志 |
 | `xpier services` | nginx / dnsmasq / php-fpm / share 总览 |
 | `sudo xpier services:start / services:stop` | 启动/停止守护进程(+ 站点 fpm) |
 | `xpier service <svc> <act>` | 单服务控制:`nginx|dnsmasq|php-fpm|php-fpm-8.2` × `status|config|configtest|reload|start|stop|restart` |

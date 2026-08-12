@@ -11,6 +11,7 @@ import (
 	"strings"
 	"xpier/internal/nginx"
 	"xpier/internal/service"
+	"xpier/internal/share"
 	sitepkg "xpier/internal/sites"
 	"xpier/internal/store"
 )
@@ -251,7 +252,7 @@ func cmdCompletion(args []string) error {
 	if len(args) > 0 {
 		shell = args[0]
 	}
-	cmds := []string{"init sync doctor status app app:init up app:up down app:down start app:start restart app:restart log app:log logs app:logs url app:url install refresh link unlink park forget paths sites sites:up sites:down site:php use php:list which which-php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure unsecure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop fetch-share-url mail:up mail:down mail xdebug tinker directory-listing isolate-node unisolate-node isolated-node node completion services services:stop services:start service ini"}
+	cmds := []string{"init sync doctor status app app:init up app:up down app:down start app:start restart app:restart log app:log logs app:logs url app:url install refresh link unlink park forget paths sites sites:up sites:down site:php use php:list php:install php:update which which-php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure unsecure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop fetch-share-url mail:up mail:down mail xdebug tinker directory-listing isolate-node unisolate-node isolated-node node completion services services:stop services:start service ini"}
 	switch shell {
 	case "zsh":
 		fmt.Printf("#compdef xpier\n_xpier() { compadd %s }\ncompdef _xpier xpier\n", cmds)
@@ -261,7 +262,20 @@ func cmdCompletion(args []string) error {
 	return nil
 }
 
-// cmdFetchShareURL is a stub: a share must be running in another terminal.
+// cmdFetchShareURL prints the public URL of a running share (the state
+// file written by the background tunnel is the source of truth).
 func cmdFetchShareURL(args []string) error {
-	return fmt.Errorf("fetch-share-url requires a running `xpier share`; the tunnel URL is printed by that process")
+	site := "default"
+	if len(args) > 0 {
+		site = args[0]
+	}
+	st, err := share.LoadShareState(site)
+	if err != nil {
+		return fmt.Errorf("no share for %q running (start with `xpier share %s`)", site, site)
+	}
+	if !store.ProcAlive(st.PID, "--url "+st.Target) {
+		return fmt.Errorf("share %q is stale (pid %d no longer ours); run `xpier share %s` again", site, st.PID, site)
+	}
+	fmt.Println(st.URL)
+	return nil
 }
