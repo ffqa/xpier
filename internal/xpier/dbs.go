@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/url"
 	"os"
 	"os/exec"
@@ -158,7 +159,37 @@ func cmdDBCreate(args []string) error {
 }
 
 // adminerSite registers a `database.<tld>` site serving Adminer.
-func ensureAdminerSite() error {
+// adminerSiteName returns the site name serving Adminer: the explicit
+// override, or an existing site pointing at the adminer dir (so a custom
+// name chosen earlier persists), or the default "database".
+func adminerSiteName(sites *store.Sites, dir, override string) string {
+	if override != "" {
+		return override
+	}
+	for n, s := range sites.Sites {
+		if s.Path == dir {
+			return n
+		}
+	}
+	return "database"
+}
+
+// uniqueAdminerName returns a random db-xxxx site name that is not taken.
+func uniqueAdminerName(sites *store.Sites) string {
+	const chars = "0123456789abcdefghijklmnopqrstuvwxyz"
+	for {
+		var b [4]byte
+		for i := range b {
+			b[i] = chars[rand.Intn(len(chars))]
+		}
+		name := "db-" + string(b[:])
+		if _, ok := sites.Sites[name]; !ok {
+			return name
+		}
+	}
+}
+
+func ensureAdminerSite(override string) error {
 	dir := filepath.Join(store.XpierHome(), "adminer")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
@@ -176,18 +207,29 @@ func ensureAdminerSite() error {
 	if err != nil {
 		return err
 	}
-	if existing, ok := sites.Sites["database"]; ok && existing.Path != dir {
-		return fmt.Errorf("a user site named `database` already exists at %s; xpier reserves the name for Adminer", existing.Path)
+	name := adminerSiteName(sites, dir, override)
+	if override != "" && !store.SafeSiteNameRe.MatchString(override) {
+		return fmt.Errorf("invalid site name %q", override)
 	}
-	sites.Sites["database"] = store.Site{Path: dir, Driver: "php"}
+	if existing, ok := sites.Sites[name]; ok && existing.Path != dir {
+		if override != "" {
+			return fmt.Errorf("a user site named %s already exists at %s; pick another with `xpier db --site <name>`", name, existing.Path)
+		}
+		// The default name is taken by a user site. The Adminer window is
+		// opened by the user themselves, so any domain works: fall back to a
+		// unique random name instead of colliding.
+		name = uniqueAdminerName(sites)
+	}
+	sites.Sites[name] = store.Site{Path: dir, Driver: "php"}
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	if err := nginx.WriteSiteNginxConfig(sites, "database"); err != nil {
+	fmt.Printf("Adminer: http://%s/\n", store.SiteDomain(sites, name))
+	if err := nginx.WriteSiteNginxConfig(sites, name); err != nil {
 		return err
 	}
 	// The config only takes effect after a reload; without this the browser
-	// opens database.<tld> to a 404 (default server).
+	// opens the site to a 404 (default server).
 	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v (run `sudo xpier install` to fix sudoers, then `xpier db` again)\n", err)
 	}
@@ -220,14 +262,14 @@ func detectMySQLServer() string {
 	return "127.0.0.1:" + port
 }
 
-// adminerURL builds the Adminer URL. siteName prefills the database field
+// adminerURL builds the Adminer URL. db prefills the database field
 // (Laravel convention: database name == site name); server prefills the
 // server field so the user does not have to fight socket paths.
-func adminerURL(sites *store.Sites, siteName, server string) string {
-	u := "http://" + store.SiteDomain(sites, "database") + "/"
+func adminerURL(domain, db, server string) string {
+	u := "http://" + domain + "/"
 	var params []string
-	if siteName != "" {
-		params = append(params, "db="+siteName)
+	if db != "" {
+		params = append(params, "db="+db)
 	}
 	if server != "" {
 		params = append(params, "server="+url.QueryEscape(server), "username=root")
@@ -240,19 +282,21 @@ func adminerURL(sites *store.Sites, siteName, server string) string {
 
 func cmdDB(args []string) error {
 	fs := flag.NewFlagSet("db", flag.ExitOnError)
+	siteFlag := fs.String("site", "", "site name for Adminer (default: database, or the last --site used)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if err := ensureAdminerSite(); err != nil {
+	if err := ensureAdminerSite(*siteFlag); err != nil {
 		return err
 	}
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	siteName := ""
+	name := adminerSiteName(sites, filepath.Join(store.XpierHome(), "adminer"), *siteFlag)
+	db := ""
 	if fs.NArg() > 0 {
-		siteName = fs.Arg(0)
+		db = fs.Arg(0)
 	}
-	return store.RunOutErr("open", adminerURL(sites, siteName, detectMySQLServer()))
+	return store.RunOutErr("open", adminerURL(store.SiteDomain(sites, name), db, detectMySQLServer()))
 }

@@ -78,7 +78,7 @@
 | `xpier db:install <svc>` | brew 安装 mysql/mariadb/redis/postgres 并启动 |
 | `xpier db:start <svc>` / `db:stop <svc>` | brew services 启停 |
 | `xpier db:create <name> [--db mysql]` | 创建数据库 |
-| `xpier db [site]` | 打开 Adminer(`database.<tld>`,默认 `database.test`);带 site 时预填该数据库名 |
+| `xpier db [db] [--site name]` | 打开内置 Adminer(`database.<tld>`,默认名被占用时自动用随机唯一域名 `db-xxxx.<tld>`,`--site` 可显式指定);带 db 时预填该数据库名 |
 
 ## 隧道 / 邮件 / 调试
 

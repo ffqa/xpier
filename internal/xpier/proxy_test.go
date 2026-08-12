@@ -157,22 +157,17 @@ func TestCmdIniMissing(t *testing.T) {
 
 func TestAdminerURL(t *testing.T) {
 	homeTemp(t)
-	s := store.DefaultSites()
-	if got := adminerURL(s, "", ""); got != "http://database.test/" {
-		t.Errorf("adminerURL no site = %q", got)
+	if got := adminerURL("database.test", "", ""); got != "http://database.test/" {
+		t.Errorf("adminerURL no db = %q", got)
 	}
-	if got := adminerURL(s, "larablog", ""); got != "http://database.test/?db=larablog" {
-		t.Errorf("adminerURL with site = %q", got)
+	if got := adminerURL("database.test", "larablog", ""); got != "http://database.test/?db=larablog" {
+		t.Errorf("adminerURL with db = %q", got)
 	}
-	if got := adminerURL(s, "", "127.0.0.1:3306"); got != "http://database.test/?server=127.0.0.1%3A3306&username=root" {
+	if got := adminerURL("database.test", "", "127.0.0.1:3306"); got != "http://database.test/?server=127.0.0.1%3A3306&username=root" {
 		t.Errorf("adminerURL with server = %q", got)
 	}
-	if got := adminerURL(s, "larablog", "127.0.0.1:3306"); got != "http://database.test/?db=larablog&server=127.0.0.1%3A3306&username=root" {
-		t.Errorf("adminerURL site+server = %q", got)
-	}
-	s.TLD = "dev"
-	if got := adminerURL(s, "", ""); got != "http://database.dev/" {
-		t.Errorf("adminerURL custom tld = %q", got)
+	if got := adminerURL("db-8f2a.test", "larablog", "127.0.0.1:3306"); got != "http://db-8f2a.test/?db=larablog&server=127.0.0.1%3A3306&username=root" {
+		t.Errorf("adminerURL db+server = %q", got)
 	}
 }
 
@@ -187,7 +182,7 @@ func TestDetectMySQLServer(t *testing.T) {
 
 func TestEnsureAdminerSiteEmbedded(t *testing.T) {
 	homeTemp(t)
-	if err := ensureAdminerSite(); err != nil {
+	if err := ensureAdminerSite(""); err != nil {
 		t.Fatal(err)
 	}
 	index := filepath.Join(store.XpierHome(), "adminer", "index.php")
@@ -212,7 +207,7 @@ func TestEnsureAdminerSiteEmbedded(t *testing.T) {
 	// A stale deployed copy is replaced by the embedded (patched) one.
 	stale := filepath.Join(store.XpierHome(), "adminer", "index.php")
 	os.WriteFile(stale, []byte("<?php // stale"), 0o644)
-	if err := ensureAdminerSite(); err != nil {
+	if err := ensureAdminerSite(""); err != nil {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(stale)
@@ -222,11 +217,53 @@ func TestEnsureAdminerSiteEmbedded(t *testing.T) {
 	if !bytes.Contains(data, []byte("xpier patch")) {
 		t.Error("deployed adminer is missing the empty-password patch")
 	}
-	// A user site named database is not overwritten.
+	// When a user site owns the default name, Adminer falls back to a unique
+	// random site and never touches the user's site.
 	reg := store.DefaultSites()
 	reg.Sites["database"] = store.Site{Path: "/user/db", Driver: "laravel"}
 	reg.Save()
-	if err := ensureAdminerSite(); err == nil {
-		t.Error("ensureAdminerSite should refuse to overwrite a user database site")
+	if err := ensureAdminerSite(""); err != nil {
+		t.Fatalf("ensureAdminerSite with taken default = %v", err)
+	}
+	s, err = store.LoadSites()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Sites["database"].Path != "/user/db" {
+		t.Error("user database site was overwritten")
+	}
+	adminerDir := filepath.Join(store.XpierHome(), "adminer")
+	var found string
+	for n, site := range s.Sites {
+		if site.Path == adminerDir {
+			found = n
+			break
+		}
+	}
+	if found == "" || found == "database" || !strings.HasPrefix(found, "db-") {
+		t.Errorf("expected a unique db-xxxx adminer site, got %q", found)
+	}
+	// The choice persists: the next call reuses the same unique site.
+	if err := ensureAdminerSite(""); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = store.LoadSites()
+	again := ""
+	for n, site := range s.Sites {
+		if site.Path == adminerDir {
+			again = n
+			break
+		}
+	}
+	if again != found {
+		t.Errorf("adminer site name changed: %q -> %q", found, again)
+	}
+	// Explicit --site override.
+	if err := ensureAdminerSite("dbadmin"); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = store.LoadSites()
+	if s.Sites["dbadmin"].Path != adminerDir {
+		t.Error("--site override not applied")
 	}
 }
