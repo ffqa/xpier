@@ -6,11 +6,12 @@
 
 | 命令 | 说明 |
 |---|---|
-| `xpier up` | 启动全部 apps(任一已在运行则拒绝) |
-| `xpier down` | 停止全部 apps 并清理 nginx 映射 |
-| `xpier start <app> [--force]` | 启动单个 app;`--force` = 重启并清编译缓存 |
+| `xpier app:init [dir] [--force]` | 生成带注释的 dev.yaml 模板 + 操作指南;已有文件需 `--force` 覆盖 |
+| `xpier up` / `app:up` | 启动全部 apps(任一已在运行则拒绝) |
+| `xpier down` / `app:down` | 停止全部 apps 并清理 nginx 映射 |
+| `xpier start <app>` / `app:start` [--force] | 启动单个 app;`--force` = 重启并清编译缓存 |
 | `xpier restart <app> [--force]` | kill + 重启单个 app |
-| `xpier log <app> [-f]` | 查看单个 app 日志(可 -f 跟随) |
+| `xpier log <app>` / `app:log` [-f] | 查看单个 app 日志(可 -f 跟随) |
 | `xpier logs` | 所有 app 日志一起看 |
 | `xpier url [app]` | 显示 app URL |
 | `xpier status` | 项目 pins、lock、app 栈表格 |

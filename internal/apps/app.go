@@ -2,6 +2,7 @@ package apps
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -980,5 +981,84 @@ func CmdURL(args []string) error {
 	for n, app := range cfg.Apps {
 		show(n, app)
 	}
+	return nil
+}
+
+// appInitTemplate is the commented dev.yaml skeleton written by `app:init`.
+const appInitTemplate = `# xpier 应用编排配置(dev.yaml)
+# 放在项目根目录;xpier up / start / log / url 从这里读取应用定义。
+# 字段说明见 docs/architecture.md,命令见 docs/commands.md。
+
+namespace: devstack          # 可选:进程隔离命名空间(默认 default;不同项目用不同 namespace 可同时跑)
+
+apps:
+  # 示例 1:PHP 常驻服务(Hyperf/Swoole)
+  php-server:
+    dir: /path/to/php-server  # 必填:工作目录(命令在此执行)
+    cmd: php bin/hyperf.php server:watch   # 必填:启动命令
+    ports: ["9501", "9502"]   # 可选:监听的端口(状态检测、端口冲突判断)
+    php: "8.2"                # 可选:固定 PHP 版本(启动前确保已安装)
+    extensions: [swoole, redis]  # 可选:需要的 PHP 扩展(启动前检查)
+    domain: api.test          # 可选:生成 nginx 反代,访问 http://api.test
+
+  # 示例 2:前端应用
+  h5:
+    dir: /path/to/h5
+    cmd: npm run dev:test
+    node: "20"                # 可选:经 nvm 固定 Node 大版本
+    env:                      # 可选:注入环境变量
+      VITE_OPEN: "0"
+
+  # 示例 3:单端口应用(不配 domain 就没有 nginx 映射,仅托管进程)
+  admin:
+    dir: /path/to/admin
+    cmd: npm run dev:local -- --no-open
+    port: "5173"
+`
+
+// appInitGuide is printed before writing the template so users who have never
+// seen dev.yaml know what to edit.
+const appInitGuide = `接下来会生成一个带注释的 dev.yaml 模板,照着下面改:
+
+1. namespace —— 一般不用动;不同项目想同时运行且互不干扰时才改成不同名字。
+2. apps 下的每个条目 = 一个应用。复制一份示例改成自己的:
+   - dir    必填,指向应用所在目录
+   - cmd    必填,平时你手动在终端敲的那条启动命令
+   - ports  填它监听的端口(没有就不填)
+   - php/node 可选,固定运行时版本
+   - domain 可选,配了之后自动生成 nginx 反代,浏览器直接访问该域名
+3. 改完运行 xpier up(全起)/ xpier start <app>(单个)/ xpier log <app>(看日志)。
+
+`
+
+// CmdInit generates a commented dev.yaml template for a group directory.
+// --force overwrites an existing dev.yaml.
+func CmdInit(args []string) error {
+	fs := flag.NewFlagSet("app:init", flag.ExitOnError)
+	force := fs.Bool("force", false, "overwrite an existing dev.yaml with the template")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	dir := "."
+	if fs.NArg() > 0 {
+		dir = fs.Arg(0)
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return err
+	}
+	if fi, err := os.Stat(abs); err != nil || !fi.IsDir() {
+		return fmt.Errorf("%s is not a directory", abs)
+	}
+	target := filepath.Join(abs, "dev.yaml")
+	if store.FileExists(target) && !*force {
+		return fmt.Errorf("%s already exists (use --force to overwrite with the template)", target)
+	}
+	fmt.Print(appInitGuide)
+	if err := os.WriteFile(target, []byte(appInitTemplate), 0o644); err != nil {
+		return err
+	}
+	fmt.Printf("created %s\n", target)
+	fmt.Println("edit it, then run `xpier up`")
 	return nil
 }

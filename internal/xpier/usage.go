@@ -8,6 +8,7 @@ func usage() {
 	fmt.Printf(`xpier %s - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
 
 Apps (multi-project orchestration, from dev.yaml / xpier.yaml apps):
+  xpier app:init [dir] [--force]       generate a commented dev.yaml template + guide
   xpier up / app:up                    start ALL apps (refuses if any already running)
   xpier start <app> / app:start [--force]   start one app (--force = restart with cache clear)
   xpier down / app:down                stop all apps and clean nginx mappings

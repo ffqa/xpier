@@ -355,3 +355,34 @@ func TestCmdLogsAllNoRunningApps(t *testing.T) {
 		t.Errorf("CmdLogsAll no running = %v", err)
 	}
 }
+
+func TestCmdAppInit(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	chdir(t, dir)
+	if err := CmdInit(nil); err != nil {
+		t.Fatalf("CmdInit = %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "dev.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	for _, want := range []string{"namespace:", "apps:", "dir:", "cmd:", "php:", "domain:"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("template missing %q", want)
+		}
+	}
+	// Existing file refuses without --force.
+	if err := CmdInit(nil); err == nil {
+		t.Error("CmdInit over existing dev.yaml should error")
+	}
+	// --force overwrites.
+	if err := CmdInit([]string{"--force"}); err != nil {
+		t.Errorf("CmdInit --force = %v", err)
+	}
+	// Invalid target dir.
+	if err := CmdInit([]string{filepath.Join(dir, "missing")}); err == nil {
+		t.Error("CmdInit on missing dir should error")
+	}
+}

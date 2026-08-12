@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"xpier/internal/store"
 )
 
 func fakeBin(t *testing.T, script string) string {
@@ -143,5 +145,19 @@ func TestVersionFlag(t *testing.T) {
 		if err := Run([]string{cmd}); err != nil {
 			t.Errorf("Run(%q) = %v", cmd, err)
 		}
+	}
+}
+
+func TestRunAppInitDispatch(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	old, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(old)
+	if err := Run([]string{"app:init"}); err != nil {
+		t.Fatalf("Run app:init = %v", err)
+	}
+	if !store.FileExists(filepath.Join(dir, "dev.yaml")) {
+		t.Error("app:init did not create dev.yaml in cwd")
 	}
 }
