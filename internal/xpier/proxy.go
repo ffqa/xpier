@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
@@ -14,7 +15,7 @@ import (
 // writes the nginx reverse proxy.
 
 func proxyConfPath(domain string) string {
-	return filepath.Join(nginxConfDir(), "proxy-"+domain+".conf")
+	return filepath.Join(nginx.NginxConfDir(), "proxy-"+domain+".conf")
 }
 
 func writeProxyConf(domain, upstream string) error {
@@ -47,7 +48,7 @@ func cmdProxy(args []string) error {
 		return fmt.Errorf("usage: xpier proxy <domain> <host[:port]|http://host:port>")
 	}
 	domain := strings.TrimPrefix(args[0], ".")
-	if !safeSiteNameRe.MatchString(domain) {
+	if !store.SafeSiteNameRe.MatchString(domain) {
 		return fmt.Errorf("invalid domain %q", domain)
 	}
 	// Append the TLD when a bare name was given (proxy -> proxy.test).
@@ -71,7 +72,7 @@ func cmdProxy(args []string) error {
 	if err := writeProxyConf(domain, upstream); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
 	fmt.Printf("proxy %s -> %s\n", domain, upstream)
@@ -118,7 +119,7 @@ func cmdUnproxy(args []string) error {
 		return err
 	}
 	os.Remove(proxyConfPath(domain))
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
 	fmt.Printf("unproxied %s\n", domain)

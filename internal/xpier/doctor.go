@@ -66,7 +66,7 @@ func cmdDoctor(args []string) error {
 	}
 
 	// extensions
-	for _, ext := range sortedKeys(extConstraints) {
+	for _, ext := range store.SortedKeys(extConstraints) {
 		if bin == "" {
 			failed = true
 			fmt.Printf("[fail] ext     %-10s php binary unavailable\n", ext)

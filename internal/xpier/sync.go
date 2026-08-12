@@ -14,7 +14,6 @@ import (
 
 var (
 	safeExtRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
-	safePhpRe = regexp.MustCompile(`^\d+\.\d+$`)
 )
 
 type planItem struct {
@@ -77,12 +76,12 @@ func plan(m *store.Manifest) []planItem {
 		phpOK = true
 	} else {
 		cmd := "brew tap shivammathur/php && brew install shivammathur/php/php@" + m.PHP
-		if !safePhpRe.MatchString(m.PHP) {
+		if !store.SafePhpRe.MatchString(m.PHP) {
 			cmd = ""
 		}
 		items = append(items, planItem{"php", m.PHP, "missing", "php@" + m.PHP + " not found", cmd})
 	}
-	for _, ext := range sortedKeys(m.Extensions) {
+	for _, ext := range store.SortedKeys(m.Extensions) {
 		it := planItem{kind: "ext", name: ext}
 		if !phpOK {
 			it.state = "missing"
@@ -101,7 +100,7 @@ func plan(m *store.Manifest) []planItem {
 		} else {
 			it.state = "missing"
 			it.detail = "not loaded in php@" + m.PHP
-			if safeExtRe.MatchString(ext) && safePhpRe.MatchString(m.PHP) {
+			if safeExtRe.MatchString(ext) && store.SafePhpRe.MatchString(m.PHP) {
 				it.command = "brew tap shivammathur/extensions && brew install shivammathur/extensions/" + ext + "@" + m.PHP
 			}
 		}
@@ -156,7 +155,7 @@ func writeLock(m *store.Manifest, lockPath string) error {
 		GeneratedAt:   time.Now().Format(time.RFC3339),
 		PHP:           store.PhpLock{Version: ver, Path: path},
 	}
-	for _, ext := range sortedKeys(m.Extensions) {
+	for _, ext := range store.SortedKeys(m.Extensions) {
 		lock.Extensions = append(lock.Extensions, store.ExtLock{
 			Name:       ext,
 			Constraint: m.Extensions[ext],

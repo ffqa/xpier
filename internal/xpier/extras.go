@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
@@ -31,7 +32,7 @@ func cmdLog(args []string) error {
 		}
 		ver = site.PHP
 		if ver == "" {
-			ver = defaultPhpVersion()
+			ver = nginx.DefaultPhpVersion()
 		}
 	}
 	logPath := filepath.Join(store.XpierHome(), "logs", "php-fpm-"+ver+".log")
@@ -104,7 +105,7 @@ func cmdMailDown(args []string) error {
 }
 
 func cmdMail(args []string) error {
-	return runOutErr("open", "http://127.0.0.1:8025")
+	return store.RunOutErr("open", "http://127.0.0.1:8025")
 }
 
 // --- Xdebug toggle ---
@@ -115,7 +116,7 @@ func xdebugConfPath(ver string) string {
 
 func cmdXdebug(args []string) error {
 	fs := flag.NewFlagSet("xdebug", flag.ExitOnError)
-	ver := fs.String("php", defaultPhpVersion(), "php version")
+	ver := fs.String("php", nginx.DefaultPhpVersion(), "php version")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

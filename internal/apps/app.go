@@ -1,4 +1,4 @@
-package xpier
+package apps
 
 import (
 	"bufio"
@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
@@ -35,9 +36,9 @@ func parseForceFlag(args []string) (bool, []string) {
 // store.App orchestration (merged from devstack): manage multiple dev servers
 // (e.g. php-server/h5/admin) together, fully non-invasive to project code.
 
-// loadAppConfig reads apps from dev.yaml (devstack compat, namespace-aware)
+// LoadAppConfig reads apps from dev.yaml (devstack compat, namespace-aware)
 // falling back to xpier.yaml's apps section.
-func loadAppConfig() (*store.AppConfig, string, error) {
+func LoadAppConfig() (*store.AppConfig, string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, "", err
@@ -172,7 +173,7 @@ func killAppPortHolders(ports []string) {
 }
 
 func appNginxConfPath(ns, name string) string {
-	return filepath.Join(nginxConfDir(), "dev-"+ns+"-"+name+".conf")
+	return filepath.Join(nginx.NginxConfDir(), "dev-"+ns+"-"+name+".conf")
 }
 
 func writeAppNginxConf(ns, name string, app store.App) error {
@@ -456,8 +457,8 @@ func appConfigHasDomain(cfg *store.AppConfig) bool {
 
 // --- commands ---
 
-func cmdUp(args []string) error {
-	cfg, cwd, err := loadAppConfig()
+func CmdUp(args []string) error {
+	cfg, cwd, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -489,15 +490,15 @@ func cmdUp(args []string) error {
 		for n, app := range cfg.Apps {
 			writeAppNginxConf(ns, n, app)
 		}
-		nginxReload()
+		nginx.NginxReload()
 	}
 	fmt.Printf("stack up (namespace %s). log: `xpier log <app>` | restart: `xpier restart <app>` | stop: `xpier down`\n", ns)
 	_ = cwd
 	return nil
 }
 
-func cmdDown(args []string) error {
-	cfg, _, err := loadAppConfig()
+func CmdDown(args []string) error {
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -526,7 +527,7 @@ func cmdDown(args []string) error {
 	}
 	if any {
 		if appConfigHasDomain(cfg) {
-			nginxReload()
+			nginx.NginxReload()
 		}
 		fmt.Println("stack down")
 	} else {
@@ -537,8 +538,8 @@ func cmdDown(args []string) error {
 
 type appStatusRow struct{ cells []string }
 
-func cmdAppStatus(args []string) error {
-	cfg, _, err := loadAppConfig()
+func CmdStatus(args []string) error {
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -675,13 +676,13 @@ func sumInts(a []int) int {
 	return t
 }
 
-func cmdAppStart(args []string) error {
+func CmdStart(args []string) error {
 	force, rest := parseForceFlag(args)
 	if len(rest) < 1 {
 		return fmt.Errorf("usage: xpier start <app> [--force]")
 	}
 	name := rest[0]
-	cfg, _, err := loadAppConfig()
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -706,13 +707,13 @@ func cmdAppStart(args []string) error {
 	return nil
 }
 
-func cmdAppRestart(args []string) error {
+func CmdRestart(args []string) error {
 	force, rest := parseForceFlag(args)
 	if len(rest) < 1 {
 		return fmt.Errorf("usage: xpier restart <app> [--force]")
 	}
 	name := rest[0]
-	cfg, _, err := loadAppConfig()
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -756,7 +757,7 @@ func clearAppCaches(app store.App, force bool) {
 	fmt.Println("  cleared compiled caches")
 }
 
-func cmdAppLog(args []string) error {
+func CmdLog(args []string) error {
 	follow := false
 	rest := make([]string, 0, len(args))
 	for _, a := range args {
@@ -769,7 +770,7 @@ func cmdAppLog(args []string) error {
 	if len(rest) < 1 {
 		return fmt.Errorf("usage: xpier log <app> [-f]")
 	}
-	cfg, _, err := loadAppConfig()
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -795,8 +796,8 @@ func cmdAppLog(args []string) error {
 
 var appLogColors = []string{"\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[35m", "\x1b[34m"}
 
-func cmdAppLogsAll(args []string) error {
-	cfg, _, err := loadAppConfig()
+func CmdLogsAll(args []string) error {
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
@@ -842,8 +843,8 @@ func cmdAppLogsAll(args []string) error {
 	return nil
 }
 
-func cmdAppURL(args []string) error {
-	cfg, _, err := loadAppConfig()
+func CmdURL(args []string) error {
+	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}

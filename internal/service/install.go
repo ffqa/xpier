@@ -1,4 +1,4 @@
-package xpier
+package service
 
 import (
 	"fmt"
@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
-// brewAsUser runs brew as the real user: Homebrew refuses to run as root.
-func brewAsUser(args ...string) (string, error) {
+// BrewAsUser runs brew as the real user: Homebrew refuses to run as root.
+func BrewAsUser(args ...string) (string, error) {
 	u := os.Getenv("SUDO_USER")
 	if u == "" {
 		u = os.Getenv("USER")
@@ -21,17 +22,17 @@ func brewAsUser(args ...string) (string, error) {
 	return string(out), err
 }
 
-func cmdInstall(args []string) error {
+func CmdInstall(args []string) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("xpier install must run as root: use `sudo xpier install`")
 	}
 	for _, pkg := range []string{"nginx", "dnsmasq"} {
-		if out, err := brewAsUser("list", "--versions", pkg); err == nil && strings.Contains(out, pkg) {
+		if out, err := BrewAsUser("list", "--versions", pkg); err == nil && strings.Contains(out, pkg) {
 			fmt.Printf("%s already installed\n", pkg)
 			continue
 		}
 		fmt.Printf("installing %s via brew (this may take a minute)...\n", pkg)
-		if out, err := brewAsUser("install", pkg); err != nil {
+		if out, err := BrewAsUser("install", pkg); err != nil {
 			return fmt.Errorf("brew install %s: %v: %s", pkg, err, out)
 		}
 	}
@@ -45,47 +46,47 @@ func cmdInstall(args []string) error {
 		}
 	}
 	fmt.Println("writing nginx + dnsmasq configs...")
-	if err := writeNginxMainConfig(); err != nil {
+	if err := nginx.WriteNginxMainConfig(); err != nil {
 		return err
 	}
-	if err := writeDefaultSiteConfig(); err != nil {
+	if err := nginx.WriteDefaultSiteConfig(); err != nil {
 		return err
 	}
 	// Regenerate site configs so they reference current paths.
 	if sites, err := store.LoadSites(); err == nil {
-		writeAllSiteConfigs(sites)
+		nginx.WriteAllSiteConfigs(sites)
 	}
-	if err := writeDnsmasqConfig("test"); err != nil {
+	if err := store.WriteDnsmasqConfig("test"); err != nil {
 		return err
 	}
-	if err := ensureWildcardCert("test"); err != nil {
+	if err := EnsureWildcardCert("test"); err != nil {
 		return err
 	}
-	if err := ensureNginxSudoers(); err != nil {
+	if err := EnsureNginxSudoers(); err != nil {
 		return fmt.Errorf("write sudoers: %w", err)
 	}
-	if err := chownHerdyHomeToUser(); err != nil {
+	if err := ChownHerdyHomeToUser(); err != nil {
 		return err
 	}
 	fmt.Println("configs written, installing launchd daemons...")
-	nginxPlist := filepath.Join(launchdDir(), "com.xpier.nginx.plist")
-	dnsPlist := filepath.Join(launchdDir(), "com.xpier.dnsmasq.plist")
-	if err := os.WriteFile(nginxPlist, []byte(launchdPlistNginx()), 0o644); err != nil {
+	nginxPlist := filepath.Join(LaunchdDir(), "com.xpier.nginx.plist")
+	dnsPlist := filepath.Join(LaunchdDir(), "com.xpier.dnsmasq.plist")
+	if err := os.WriteFile(nginxPlist, []byte(LaunchdPlistNginx()), 0o644); err != nil {
 		return err
 	}
-	if err := os.WriteFile(dnsPlist, []byte(launchdPlistDnsmasq()), 0o644); err != nil {
+	if err := os.WriteFile(dnsPlist, []byte(LaunchdPlistDnsmasq()), 0o644); err != nil {
 		return err
 	}
 	// Boot out any daemons from earlier names (com.herdy.*, com.pier.*) so
 	// they do not keep holding ports while the new com.xpier.* daemons start.
-	runOutErr("launchctl", "bootout", "system/com.herdy.nginx")
-	runOutErr("launchctl", "bootout", "system/com.herdy.dnsmasq")
-	runOutErr("launchctl", "bootout", "system/com.pier.nginx")
-	runOutErr("launchctl", "bootout", "system/com.pier.dnsmasq")
-	if err := launchctlBootstrap("com.xpier.nginx", nginxPlist); err != nil {
+	store.RunOutErr("launchctl", "bootout", "system/com.herdy.nginx")
+	store.RunOutErr("launchctl", "bootout", "system/com.herdy.dnsmasq")
+	store.RunOutErr("launchctl", "bootout", "system/com.pier.nginx")
+	store.RunOutErr("launchctl", "bootout", "system/com.pier.dnsmasq")
+	if err := LaunchctlBootstrap("com.xpier.nginx", nginxPlist); err != nil {
 		return err
 	}
-	if err := launchctlBootstrap("com.xpier.dnsmasq", dnsPlist); err != nil {
+	if err := LaunchctlBootstrap("com.xpier.dnsmasq", dnsPlist); err != nil {
 		return err
 	}
 	fmt.Println("xpier install complete.")
@@ -103,7 +104,7 @@ func checkPortConflicts() error {
 		var busy bool
 		var holder string
 		if c.proto == "udp" {
-			b, _ := udpBusy(c.port)
+			b, _ := store.UDPBusy(c.port)
 			busy = b
 			if b {
 				out, _ := store.RunOut("lsof", "-nP", "-iUDP:"+c.port)
@@ -140,9 +141,9 @@ func isOurBinary(holder string) bool {
 	if cmdline == "" {
 		return false
 	}
-	if strings.Contains(cmdline, nginxBin()) ||
+	if strings.Contains(cmdline, nginx.NginxBin()) ||
 		strings.Contains(cmdline, "/opt/nginx/bin/nginx") ||
-		strings.Contains(cmdline, dnsmasqBin()) ||
+		strings.Contains(cmdline, DnsmasqBin()) ||
 		strings.Contains(cmdline, "/opt/dnsmasq/sbin/dnsmasq") {
 		return true
 	}
@@ -160,11 +161,11 @@ func firstNonHeaderLine(out string) string {
 	return out
 }
 
-// chownHerdyHomeToUser returns ownership of ~/.xpier files to the real user:
+// ChownHerdyHomeToUser returns ownership of ~/.xpier files to the real user:
 // configs written during `sudo xpier install` would otherwise be root-owned
 // and uneditable by the user (nginx.conf, dnsmasq.conf, ...).
-func chownHerdyHomeToUser() error {
-	u, err := currentUser()
+func ChownHerdyHomeToUser() error {
+	u, err := CurrentUser()
 	if err != nil {
 		return err
 	}

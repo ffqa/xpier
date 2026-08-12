@@ -1,4 +1,4 @@
-package xpier
+package share
 
 import (
 	"encoding/json"
@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
@@ -22,12 +23,12 @@ type ShareState struct {
 	Log    string `json:"log"`
 }
 
-func shareStatePath(site string) string {
+func ShareStatePath(site string) string {
 	return filepath.Join(store.XpierHome(), "servers", "share-"+site+".json")
 }
 
-func loadShareState(site string) (*ShareState, error) {
-	data, err := os.ReadFile(shareStatePath(site))
+func LoadShareState(site string) (*ShareState, error) {
+	data, err := os.ReadFile(ShareStatePath(site))
 	if err != nil {
 		return nil, err
 	}
@@ -38,18 +39,18 @@ func loadShareState(site string) (*ShareState, error) {
 	return &st, nil
 }
 
-func saveShareState(st *ShareState) error {
-	if err := os.MkdirAll(filepath.Dir(shareStatePath(st.Site)), 0o755); err != nil {
+func SaveShareState(st *ShareState) error {
+	if err := os.MkdirAll(filepath.Dir(ShareStatePath(st.Site)), 0o755); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(shareStatePath(st.Site), data, 0o644)
+	return os.WriteFile(ShareStatePath(st.Site), data, 0o644)
 }
 
-func cloudflaredBin() string {
+func CloudflaredBin() string {
 	if p := filepath.Join(store.BrewPrefix(), "bin", "cloudflared"); store.FileExists(p) {
 		return p
 	}
@@ -89,7 +90,7 @@ func verifyPublicURL(url string) string {
 // the public URL once it is live. insecure disables origin TLS verification
 // (for self-signed dev certs like vite's basic-ssl).
 func startTunnel(key, target string, insecure bool) (string, error) {
-	bin := cloudflaredBin()
+	bin := CloudflaredBin()
 	if err := store.EnsureBrewPackage(bin, "cloudflared", "cloudflared"); err != nil {
 		return "", err
 	}
@@ -129,7 +130,7 @@ func startTunnel(key, target string, insecure bool) (string, error) {
 		return "", fmt.Errorf("cloudflared did not register; see %s", logPath)
 	}
 	st := &ShareState{Site: key, PID: cmd.Process.Pid, URL: tunnelURL, Target: target, Log: logPath}
-	if err := saveShareState(st); err != nil {
+	if err := SaveShareState(st); err != nil {
 		return "", err
 	}
 	return tunnelURL, nil
@@ -137,7 +138,7 @@ func startTunnel(key, target string, insecure bool) (string, error) {
 
 // stopShareByKey stops a managed tunnel by its state key.
 func stopShareByKey(key string) {
-	st, err := loadShareState(key)
+	st, err := LoadShareState(key)
 	if err != nil {
 		return
 	}
@@ -148,7 +149,7 @@ func stopShareByKey(key string) {
 			store.KillGroup(st.PID, syscall.SIGKILL)
 		}
 	}
-	os.Remove(shareStatePath(key))
+	os.Remove(ShareStatePath(key))
 }
 
 // probeURL returns the HTTP status code for a URL, or "" on failure.
@@ -172,7 +173,7 @@ func detectOriginProto(port string) string {
 	return "http"
 }
 
-func cmdShare(args []string) error {
+func CmdShare(args []string) error {
 	fs := flag.NewFlagSet("share", flag.ExitOnError)
 	backend := fs.String("backend", "cloudflared", "tunnel backend (cloudflared)")
 	port := fs.String("port", "", "share an existing local port (no site needed)")
@@ -184,7 +185,7 @@ func cmdShare(args []string) error {
 	key := siteName
 	url := "http://127.0.0.1:80"
 	insecure := false
-	sites, err := store.LoadSites()
+	s, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
@@ -204,20 +205,20 @@ func cmdShare(args []string) error {
 		insecure = proto == "https"
 		siteName = ""
 	} else if siteName != "" {
-		site, ok := sites.Sites[siteName]
+		site, ok := s.Sites[siteName]
 		if !ok {
 			return fmt.Errorf("site %s is not linked", siteName)
 		}
 		if site.Driver == "hyperf" {
-			url = "http://127.0.0.1:" + hyperfPort(site)
+			url = "http://127.0.0.1:" + nginx.HyperfPort(site)
 		} else {
-			url = "http://" + siteDomain(sites, siteName) + "/"
+			url = "http://" + store.SiteDomain(s, siteName) + "/"
 		}
 	}
 	if key == "" {
 		key = "default"
 	}
-	if st, err := loadShareState(key); err == nil && store.PidAlive(st.PID) {
+	if st, err := LoadShareState(key); err == nil && store.PidAlive(st.PID) {
 		fmt.Printf("already sharing: %s (pid %d)\n", st.URL, st.PID)
 		return nil
 	}
@@ -234,10 +235,10 @@ func cmdShare(args []string) error {
 			if i := strings.IndexByte(host, '/'); i >= 0 {
 				host = host[:i]
 			}
-			if err := writeSiteNginxConfigWithNames(sites, siteName, []string{host}); err != nil {
+			if err := nginx.WriteSiteNginxConfigWithNames(s, siteName, []string{host}); err != nil {
 				return err
 			}
-			if err := nginxReload(); err != nil {
+			if err := nginx.NginxReload(); err != nil {
 				fmt.Printf("[warn] nginx reload failed: %v\n", err)
 			}
 		}
@@ -254,7 +255,7 @@ func cmdShare(args []string) error {
 	}
 }
 
-func cmdShares(args []string) error {
+func CmdShares(args []string) error {
 	entries, err := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	if err != nil {
 		fmt.Println("no shares")
@@ -266,7 +267,7 @@ func cmdShares(args []string) error {
 			continue
 		}
 		site := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "share-"), ".json")
-		st, err := loadShareState(site)
+		st, err := LoadShareState(site)
 		if err != nil {
 			continue
 		}
@@ -283,23 +284,23 @@ func cmdShares(args []string) error {
 	return nil
 }
 
-func cmdShareStop(args []string) error {
-	sites := []string{}
+func CmdShareStop(args []string) error {
+	keys := []string{}
 	if len(args) > 0 {
-		sites = append(sites, args[0])
+		keys = append(keys, args[0])
 	} else {
 		entries, _ := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 		for _, e := range entries {
 			if strings.HasPrefix(e.Name(), "share-") && strings.HasSuffix(e.Name(), ".json") {
-				sites = append(sites, strings.TrimSuffix(strings.TrimPrefix(e.Name(), "share-"), ".json"))
+				keys = append(keys, strings.TrimSuffix(strings.TrimPrefix(e.Name(), "share-"), ".json"))
 			}
 		}
 	}
-	if len(sites) == 0 {
+	if len(keys) == 0 {
 		return fmt.Errorf("no shares to stop")
 	}
-	for _, site := range sites {
-		st, err := loadShareState(site)
+	for _, site := range keys {
+		st, err := LoadShareState(site)
 		if err != nil {
 			continue
 		}
@@ -310,12 +311,12 @@ func cmdShareStop(args []string) error {
 				store.KillGroup(st.PID, syscall.SIGKILL)
 			}
 		}
-		os.Remove(shareStatePath(site))
+		os.Remove(ShareStatePath(site))
 		// Remove the tunnel host from the site's nginx config.
 		if s, err := store.LoadSites(); err == nil {
 			if _, ok := s.Sites[site]; ok {
-				writeSiteNginxConfig(s, site)
-				nginxReload()
+				nginx.WriteSiteNginxConfig(s, site)
+				nginx.NginxReload()
 			}
 		}
 		fmt.Printf("stopped share %s\n", site)

@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -369,4 +371,74 @@ func EnsureBrewPackage(bin, formula, display string) error {
 		return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
 	}
 	return nil
+}
+
+func CurrentUser() (*user.User, error) {
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" && os.Geteuid() == 0 {
+		return user.Lookup(sudoUser)
+	}
+	return user.Current()
+}
+
+func SiteDomain(s *Sites, name string) string { return name + "." + s.TLD }
+
+func SiteRoot(site Site) string {
+	switch site.Driver {
+	case "laravel":
+		return filepath.Join(site.Path, "public")
+	case "spa":
+		return filepath.Join(site.Path, "dist")
+	}
+	return site.Path
+}
+
+var SafeSiteNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+
+var SafePhpRe = regexp.MustCompile(`^\d+\.\d+$`)
+
+func RunOutErr(name string, args ...string) error {
+	_, err := RunOut(name, args...)
+	return err
+}
+
+func UDPBusy(port string) (bool, error) {
+	out, err := RunOut("lsof", "-ti", "udp:"+port)
+	if err != nil && out == "" {
+		return false, nil
+	}
+	return strings.TrimSpace(out) != "", nil
+}
+
+func SortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func DnsmasqConfPath() string {
+	return filepath.Join(XpierHome(), "dnsmasq", "dnsmasq.conf")
+}
+
+func WriteDnsmasqConfig(tld string) error {
+	conf := fmt.Sprintf(`port=53
+listen-address=127.0.0.1
+bind-interfaces
+no-resolv
+address=/.%s/127.0.0.1
+`, tld)
+	if err := os.MkdirAll(filepath.Dir(DnsmasqConfPath()), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(DnsmasqConfPath(), []byte(conf), 0o644)
+}
+
+// UpDown formats a boolean as the up/down string used by status tables.
+func UpDown(up bool) string {
+	if up {
+		return "up"
+	}
+	return "down"
 }

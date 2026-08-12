@@ -1,39 +1,40 @@
-package xpier
+package nginx
 
 import (
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"xpier/internal/store"
 )
 
-func nginxHome() string {
+func NginxHome() string {
 	return filepath.Join(store.XpierHome(), "nginx")
 }
 
-func nginxConfDir() string {
-	return filepath.Join(nginxHome(), "conf.d")
+func NginxConfDir() string {
+	return filepath.Join(NginxHome(), "conf.d")
 }
 
-func nginxBin() string {
+func NginxBin() string {
 	if p := filepath.Join(store.BrewPrefix(), "bin", "nginx"); store.FileExists(p) {
 		return p
 	}
 	return "/usr/local/bin/nginx"
 }
 
-func siteConfPath(name string) string {
-	return filepath.Join(nginxConfDir(), name+".conf")
+func SiteConfPath(name string) string {
+	return filepath.Join(NginxConfDir(), name+".conf")
 }
 
-func fastcgiParamsPath() string {
+func FastcgiParamsPath() string {
 	return filepath.Join(store.BrewPrefix(), "etc", "nginx", "fastcgi_params")
 }
 
-func writeNginxMainConfig() error {
-	user, err := currentUser()
+func WriteNginxMainConfig() error {
+	user, err := store.CurrentUser()
 	if err != nil {
 		return err
 	}
@@ -53,12 +54,12 @@ http {
     server_names_hash_bucket_size 256;
     include %s/*.conf;
 }
-`, user.Username, nginxHome(), nginxHome(), filepath.Join(store.BrewPrefix(), "etc", "nginx", "mime.types"), nginxConfDir())
-	return os.WriteFile(filepath.Join(nginxHome(), "nginx.conf"), []byte(conf), 0o644)
+`, user.Username, NginxHome(), NginxHome(), filepath.Join(store.BrewPrefix(), "etc", "nginx", "mime.types"), NginxConfDir())
+	return os.WriteFile(filepath.Join(NginxHome(), "nginx.conf"), []byte(conf), 0o644)
 }
 
-// defaultPhpVersion picks the highest brew php@X installed, falling back to 8.2.
-func defaultPhpVersion() string {
+// DefaultPhpVersion picks the highest brew php@X installed, falling back to 8.2.
+func DefaultPhpVersion() string {
 	best := ""
 	entries, err := os.ReadDir(filepath.Join(store.BrewPrefix(), "opt"))
 	if err != nil {
@@ -113,30 +114,30 @@ func compareVersionStrings(a, b string) int {
 	return 0
 }
 
-func writeSiteNginxConfig(sites *store.Sites, name string) error {
-	return writeSiteNginxConfigWithNames(sites, name, nil)
+func WriteSiteNginxConfig(sites *store.Sites, name string) error {
+	return WriteSiteNginxConfigWithNames(sites, name, nil)
 }
 
-// writeSiteNginxConfigWithNames writes a site's nginx config. extra names are
+// WriteSiteNginxConfigWithNames writes a site's nginx config. extra names are
 // additional server_name values (used by `xpier share` so the tunnel host
 // resolves to the site).
-func writeSiteNginxConfigWithNames(sites *store.Sites, name string, extra []string) error {
+func WriteSiteNginxConfigWithNames(sites *store.Sites, name string, extra []string) error {
 	site, ok := sites.Sites[name]
 	if !ok {
 		return fmt.Errorf("site %s not linked", name)
 	}
 	php := site.PHP
 	if php == "" {
-		php = defaultPhpVersion()
+		php = DefaultPhpVersion()
 	}
-	domain := siteDomain(sites, name)
-	root := siteRoot(site)
+	domain := store.SiteDomain(sites, name)
+	root := store.SiteRoot(site)
 	cert := filepath.Join(store.XpierHome(), "certs", "wildcard."+sites.TLD+".pem")
 	certKey := filepath.Join(store.XpierHome(), "certs", "wildcard."+sites.TLD+"-key.pem")
 	// Prefer a per-domain cert (signed via `sudo xpier secure <domain>`) when
 	// one exists; the *.test wildcard does not cover multi-label hosts like
 	// img.test28.test.
-	if dc, dk := domainCertPaths(domain); store.FileExists(dc) && store.FileExists(dk) {
+	if dc, dk := DomainCertPaths(domain); store.FileExists(dc) && store.FileExists(dk) {
 		cert, certKey = dc, dk
 	}
 
@@ -157,7 +158,7 @@ func writeSiteNginxConfigWithNames(sites *store.Sites, name string, extra []stri
 	fmt.Fprintf(&conf, "    root %s;\n", root)
 	conf.WriteString("    index index.php index.html;\n")
 	if site.Driver == "hyperf" {
-		port := hyperfPort(site)
+		port := HyperfPort(site)
 		conf.WriteString("    location / {\n")
 		fmt.Fprintf(&conf, "        proxy_pass http://127.0.0.1:%s;\n", port)
 		conf.WriteString("        proxy_http_version 1.1;\n")
@@ -174,7 +175,7 @@ func writeSiteNginxConfigWithNames(sites *store.Sites, name string, extra []stri
 		conf.WriteString("    }\n")
 		conf.WriteString("    location ~ \\.php$ {\n")
 		fmt.Fprintf(&conf, "        fastcgi_pass unix:%s;\n", sock)
-		fmt.Fprintf(&conf, "        include %s;\n", fastcgiParamsPath())
+		fmt.Fprintf(&conf, "        include %s;\n", FastcgiParamsPath())
 		conf.WriteString("        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;\n")
 		conf.WriteString("    }\n")
 	} else {
@@ -184,23 +185,23 @@ func writeSiteNginxConfigWithNames(sites *store.Sites, name string, extra []stri
 	}
 	conf.WriteString("}\n")
 
-	if err := os.MkdirAll(nginxConfDir(), 0o755); err != nil {
+	if err := os.MkdirAll(NginxConfDir(), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(siteConfPath(name), []byte(conf.String()), 0o644)
+	return os.WriteFile(SiteConfPath(name), []byte(conf.String()), 0o644)
 }
 
-func removeSiteNginxConfig(name string) error {
-	err := os.Remove(siteConfPath(name))
+func RemoveSiteNginxConfig(name string) error {
+	err := os.Remove(SiteConfPath(name))
 	if os.IsNotExist(err) {
 		return nil
 	}
 	return err
 }
 
-// writeDefaultSiteConfig returns 404 for any host that is not a registered
+// WriteDefaultSiteConfig returns 404 for any host that is not a registered
 // site, so an unlinked domain can never fall through to another site.
-func writeDefaultSiteConfig() error {
+func WriteDefaultSiteConfig() error {
 	cert := filepath.Join(store.XpierHome(), "certs", "wildcard.test.pem")
 	certKey := filepath.Join(store.XpierHome(), "certs", "wildcard.test-key.pem")
 	conf := fmt.Sprintf(`server {
@@ -212,14 +213,14 @@ func writeDefaultSiteConfig() error {
     return 404;
 }
 `, cert, certKey)
-	return os.WriteFile(filepath.Join(nginxConfDir(), "00-default.conf"), []byte(conf), 0o644)
+	return os.WriteFile(filepath.Join(NginxConfDir(), "00-default.conf"), []byte(conf), 0o644)
 }
 
-// nginxReload reloads the launchd-managed nginx master via a passwordless
+// NginxReload reloads the launchd-managed nginx master via a passwordless
 // sudoers entry installed by `xpier install`. The -c flag is required so
 // nginx reads our pid file (defaults would target /usr/local/var/run).
-func nginxReload() error {
-	cmd := exec.Command("sudo", "-n", nginxBin(), "-s", "reload", "-c", filepath.Join(nginxHome(), "nginx.conf"))
+func NginxReload() error {
+	cmd := exec.Command("sudo", "-n", NginxBin(), "-s", "reload", "-c", filepath.Join(NginxHome(), "nginx.conf"))
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
@@ -227,7 +228,62 @@ func nginxReload() error {
 	return nil
 }
 
-func loadManifestFrom(dir string) (*store.Manifest, error) {
+func LoadManifestFrom(dir string) (*store.Manifest, error) {
 	manifestPath, _ := store.ResolvePaths(dir)
 	return store.LoadManifest(manifestPath)
+}
+
+// ServerPorts best-effort reads config/autoload/server.php for name -> port pairs.
+func ServerPorts(dir string) map[string]string {
+	data, err := os.ReadFile(filepath.Join(dir, "config", "autoload", "server.php"))
+	if err != nil {
+		return nil
+	}
+	names := serverNameRe.FindAllStringSubmatch(string(data), -1)
+	ports := serverPortRe.FindAllStringSubmatch(string(data), -1)
+	if len(names) == 0 || len(ports) == 0 {
+		return nil
+	}
+	out := make(map[string]string)
+	for i := 0; i < len(names) && i < len(ports); i++ {
+		out[names[i][1]] = ports[i][1]
+	}
+	return out
+}
+
+var (
+	serverNameRe = regexp.MustCompile(`'name'\s*=>\s*'([a-z0-9_]+)'`)
+	serverPortRe = regexp.MustCompile(`'port'\s*=>\s*(\d+)`)
+)
+
+// HyperfPort returns the proxy port for a hyperf site.
+func HyperfPort(site store.Site) string {
+	ports := ServerPorts(site.Path)
+	if p, ok := ports["http"]; ok {
+		return p
+	}
+	return "9501"
+}
+
+func CertPaths(tld string) (string, string) {
+	return filepath.Join(store.XpierHome(), "certs", "wildcard."+tld+".pem"),
+		filepath.Join(store.XpierHome(), "certs", "wildcard."+tld+"-key.pem")
+}
+
+func DomainCertPaths(domain string) (string, string) {
+	return filepath.Join(store.XpierHome(), "certs", domain+".pem"),
+		filepath.Join(store.XpierHome(), "certs", domain+"-key.pem")
+}
+
+// WriteAllSiteConfigs regenerates nginx configs for every registered site.
+func WriteAllSiteConfigs(sites *store.Sites) error {
+	if err := WriteDefaultSiteConfig(); err != nil {
+		return err
+	}
+	for name := range sites.Sites {
+		if err := WriteSiteNginxConfig(sites, name); err != nil {
+			return err
+		}
+	}
+	return nil
 }

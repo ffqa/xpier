@@ -1,34 +1,36 @@
-package xpier
+package service
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"xpier/internal/nginx"
+	"xpier/internal/share"
 	"xpier/internal/store"
 )
 
-func dnsmasqRunning() bool {
+func DnsmasqRunning() bool {
 	// lsof sometimes fails to report dnsmasq's UDP 53 socket on macOS;
 	// detect the process instead.
-	out, err := store.RunOut("pgrep", "-f", dnsmasqBin())
+	out, err := store.RunOut("pgrep", "-f", DnsmasqBin())
 	return err == nil && strings.TrimSpace(out) != ""
 }
 
-func xpierServiceStatus() {
+func XpierServiceStatus() {
 	nginxUp := false
 	if b, _ := store.PortBusy("80"); b {
 		nginxUp = true
 	}
-	dnsUp := dnsmasqRunning()
-	fmt.Printf("nginx:   %s\n", upDown(nginxUp))
-	fmt.Printf("dnsmasq: %s\n", upDown(dnsUp))
+	dnsUp := DnsmasqRunning()
+	fmt.Printf("nginx:   %s\n", store.UpDown(nginxUp))
+	fmt.Printf("dnsmasq: %s\n", store.UpDown(dnsUp))
 	entries, _ := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	fpm := []string{}
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "fpm-") && strings.HasSuffix(e.Name(), ".json") {
 			ver := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "fpm-"), ".json")
-			if fpmRunning(ver) {
+			if FpmRunning(ver) {
 				fpm = append(fpm, ver)
 			}
 		}
@@ -44,7 +46,7 @@ func xpierServiceStatus() {
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "share-") && strings.HasSuffix(e.Name(), ".json") {
 			site := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "share-"), ".json")
-			if st, err := loadShareState(site); err == nil && store.PidAlive(st.PID) {
+			if st, err := share.LoadShareState(site); err == nil && store.PidAlive(st.PID) {
 				shares = append(shares, fmt.Sprintf("%s(%s)", site, st.URL))
 			}
 		}
@@ -56,12 +58,12 @@ func xpierServiceStatus() {
 	}
 }
 
-func cmdServices(args []string) error {
-	xpierServiceStatus()
+func CmdServices(args []string) error {
+	XpierServiceStatus()
 	return nil
 }
 
-func stopDaemon(label string) error {
+func StopDaemon(label string) error {
 	out, err := store.RunOut("launchctl", "bootout", "system/"+label)
 	if err != nil {
 		return fmt.Errorf("bootout %s: %v: %s", label, err, out)
@@ -69,36 +71,36 @@ func stopDaemon(label string) error {
 	return nil
 }
 
-func startDaemon(label string) error {
-	return launchctlBootstrap(label, filepath.Join(launchdDir(), label+".plist"))
+func StartDaemon(label string) error {
+	return LaunchctlBootstrap(label, filepath.Join(LaunchdDir(), label+".plist"))
 }
 
-func restartDaemon(label string) error {
-	runOutErr("launchctl", "bootout", "system/"+label)
-	return startDaemon(label)
+func RestartDaemon(label string) error {
+	store.RunOutErr("launchctl", "bootout", "system/"+label)
+	return StartDaemon(label)
 }
 
-func stopDaemons() error {
+func StopDaemons() error {
 	for _, label := range []string{"com.xpier.nginx", "com.xpier.dnsmasq"} {
-		if err := stopDaemon(label); err != nil {
+		if err := StopDaemon(label); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func startDaemons() error {
+func StartDaemons() error {
 	for _, label := range []string{"com.xpier.nginx", "com.xpier.dnsmasq"} {
-		if err := startDaemon(label); err != nil {
+		if err := StartDaemon(label); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// showConfig prints the path and opens the file in an editor when available,
+// ShowConfig prints the path and opens the file in an editor when available,
 // otherwise prints the content.
-func showConfig(path string) error {
+func ShowConfig(path string) error {
 	fmt.Printf("config: %s\n", path)
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -107,7 +109,7 @@ func showConfig(path string) error {
 		}
 	}
 	if editor != "" {
-		return runOutErr(editor, path)
+		return store.RunOutErr(editor, path)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -117,8 +119,8 @@ func showConfig(path string) error {
 	return nil
 }
 
-// cmdService manages a single service: nginx / dnsmasq / php-fpm[-<ver>].
-func cmdService(args []string) error {
+// CmdService manages a single service: nginx / dnsmasq / php-fpm[-<ver>].
+func CmdService(args []string) error {
 	if len(args) < 2 {
 		return fmt.Errorf("usage: xpier service <nginx|dnsmasq|php-fpm|php-fpm-8.2> <status|config|configtest|reload|start|stop|restart>")
 	}
@@ -127,7 +129,7 @@ func cmdService(args []string) error {
 	if strings.HasPrefix(name, "php-fpm") {
 		ver = strings.TrimPrefix(name, "php-fpm-")
 		if ver == name || ver == "" {
-			ver = defaultPhpVersion()
+			ver = nginx.DefaultPhpVersion()
 		}
 		name = "php-fpm"
 	}
@@ -136,17 +138,17 @@ func cmdService(args []string) error {
 		switch action {
 		case "status":
 			b, _ := store.PortBusy("80")
-			fmt.Printf("nginx: %s\n", upDown(b))
+			fmt.Printf("nginx: %s\n", store.UpDown(b))
 		case "config":
-			return showConfig(filepath.Join(nginxHome(), "nginx.conf"))
+			return ShowConfig(filepath.Join(nginx.NginxHome(), "nginx.conf"))
 		case "configtest":
-			out, err := store.RunOut("sudo", "-n", nginxBin(), "-t", "-c", filepath.Join(nginxHome(), "nginx.conf"))
+			out, err := store.RunOut("sudo", "-n", nginx.NginxBin(), "-t", "-c", filepath.Join(nginx.NginxHome(), "nginx.conf"))
 			if err != nil {
 				return fmt.Errorf("nginx configtest failed: %v: %s", err, out)
 			}
 			fmt.Println("nginx configuration test successful")
 		case "reload":
-			if err := nginxReload(); err != nil {
+			if err := nginx.NginxReload(); err != nil {
 				return err
 			}
 			fmt.Println("nginx reloaded")
@@ -157,11 +159,11 @@ func cmdService(args []string) error {
 			var err error
 			switch action {
 			case "start":
-				err = startDaemon("com.xpier.nginx")
+				err = StartDaemon("com.xpier.nginx")
 			case "stop":
-				err = stopDaemon("com.xpier.nginx")
+				err = StopDaemon("com.xpier.nginx")
 			case "restart":
-				err = restartDaemon("com.xpier.nginx")
+				err = RestartDaemon("com.xpier.nginx")
 			}
 			if err != nil {
 				return err
@@ -173,11 +175,11 @@ func cmdService(args []string) error {
 	case "dnsmasq":
 		switch action {
 		case "status":
-			fmt.Printf("dnsmasq: %s\n", upDown(dnsmasqRunning()))
+			fmt.Printf("dnsmasq: %s\n", store.UpDown(DnsmasqRunning()))
 		case "config":
-			return showConfig(dnsmasqConfPath())
+			return ShowConfig(store.DnsmasqConfPath())
 		case "configtest":
-			out, err := store.RunOut(dnsmasqBin(), "--test", "-C", dnsmasqConfPath())
+			out, err := store.RunOut(DnsmasqBin(), "--test", "-C", store.DnsmasqConfPath())
 			if err != nil {
 				return fmt.Errorf("dnsmasq configtest failed: %v: %s", err, out)
 			}
@@ -189,11 +191,11 @@ func cmdService(args []string) error {
 			var err error
 			switch action {
 			case "start":
-				err = startDaemon("com.xpier.dnsmasq")
+				err = StartDaemon("com.xpier.dnsmasq")
 			case "stop":
-				err = stopDaemon("com.xpier.dnsmasq")
+				err = StopDaemon("com.xpier.dnsmasq")
 			case "restart":
-				err = restartDaemon("com.xpier.dnsmasq")
+				err = RestartDaemon("com.xpier.dnsmasq")
 			}
 			if err != nil {
 				return err
@@ -205,16 +207,16 @@ func cmdService(args []string) error {
 	case "php-fpm":
 		switch action {
 		case "status":
-			fmt.Printf("php-fpm %s: %s\n", ver, upDown(fpmRunning(ver)))
+			fmt.Printf("php-fpm %s: %s\n", ver, store.UpDown(FpmRunning(ver)))
 		case "config":
-			return showConfig(fpmConfPath(ver))
+			return ShowConfig(FpmConfPath(ver))
 		case "start":
-			return fpmUp(ver)
+			return FpmUp(ver)
 		case "stop":
-			return fpmDown(ver)
+			return FpmDown(ver)
 		case "restart":
-			fpmDown(ver)
-			return fpmUp(ver)
+			FpmDown(ver)
+			return FpmUp(ver)
 		default:
 			return fmt.Errorf("unknown action %q", action)
 		}
@@ -224,29 +226,50 @@ func cmdService(args []string) error {
 	return nil
 }
 
-func cmdServicesStop(args []string) error {
+func CmdServicesStop(args []string) error {
 	entries, _ := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "fpm-") && strings.HasSuffix(e.Name(), ".json") {
 			ver := strings.TrimSuffix(strings.TrimPrefix(e.Name(), "fpm-"), ".json")
-			fpmDown(ver)
+			FpmDown(ver)
 		}
 	}
 	if os.Geteuid() == 0 {
-		return stopDaemons()
+		return StopDaemons()
 	}
 	fmt.Println("php-fpm stopped; nginx/dnsmasq still running (run `sudo xpier services:stop` to stop them too)")
 	return nil
 }
 
-func cmdServicesStart(args []string) error {
+func CmdServicesStart(args []string) error {
 	if os.Geteuid() == 0 {
-		if err := startDaemons(); err != nil {
+		if err := StartDaemons(); err != nil {
 			return err
 		}
 		fmt.Println("nginx + dnsmasq daemons started")
 	} else {
 		fmt.Println("starting php-fpm for linked sites (run `sudo xpier services:start` to also start nginx/dnsmasq)")
 	}
-	return cmdSitesUp(args)
+	return startSiteFpms()
+}
+
+func startSiteFpms() error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	versions := map[string]bool{}
+	for _, site := range sites.Sites {
+		ver := site.PHP
+		if ver == "" {
+			ver = nginx.DefaultPhpVersion()
+		}
+		versions[ver] = true
+	}
+	for ver := range versions {
+		if err := FpmUp(ver); err != nil {
+			fmt.Printf("[warn] %v\n", err)
+		}
+	}
+	return nil
 }

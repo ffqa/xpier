@@ -1,29 +1,24 @@
-package xpier
+package sites
 
 import (
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
+	"xpier/internal/nginx"
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
 
-var safeSiteNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-
-func siteDomain(s *store.Sites, name string) string {
-	return name + "." + s.TLD
-}
-
-// detectDriver classifies a project directory.
+// DetectDriver classifies a project directory.
 //
 //	laravel: public/index.php (PHP-FPM)
 //	hyperf:  bin/hyperf.php (reverse-proxy to the runtime port)
 //	spa:     dist/index.html (static, dist as document root)
 //	static:  anything else
-func detectDriver(dir string) string {
+func DetectDriver(dir string) string {
 	if store.FileExists(filepath.Join(dir, "bin", "hyperf.php")) {
 		return "hyperf"
 	}
@@ -47,18 +42,10 @@ func siteRoot(site store.Site) string {
 	return site.Path
 }
 
-// hyperfPort returns the proxy port for a hyperf site, reading
+// nginx.HyperfPort returns the proxy port for a hyperf site, reading
 // config/autoload/server.php when possible.
-func hyperfPort(site store.Site) string {
-	ports := serverPorts(site.Path)
-	if p, ok := ports["http"]; ok {
-		return p
-	}
-	return "9501"
-}
-
-// cmdPark registers directories whose subdirectories become sites.
-func cmdPark(args []string) error {
+// CmdPark registers directories whose subdirectories become sites.
+func CmdPark(args []string) error {
 	fs := flag.NewFlagSet("park", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -83,21 +70,21 @@ func cmdPark(args []string) error {
 		}
 		fmt.Printf("parked %s\n", abs)
 	}
-	syncParked(sites)
+	SyncParked(sites)
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	for _, name := range sortedKeys(sites.Sites) {
-		fmt.Printf("  site %s -> %s (%s)\n", siteDomain(sites, name), sites.Sites[name].Path, sites.Sites[name].Driver)
+	for _, name := range store.SortedKeys(sites.Sites) {
+		fmt.Printf("  site %s -> %s (%s)\n", store.SiteDomain(sites, name), sites.Sites[name].Path, sites.Sites[name].Driver)
 	}
-	if err := writeAllSiteConfigs(sites); err != nil {
+	if err := nginx.WriteAllSiteConfigs(sites); err != nil {
 		return err
 	}
-	return nginxReload()
+	return nginx.NginxReload()
 }
 
-// syncParked auto-registers immediate subdirectories of parked paths.
-func syncParked(sites *store.Sites) {
+// SyncParked auto-registers immediate subdirectories of parked paths.
+func SyncParked(sites *store.Sites) {
 	for _, dir := range sites.Parked {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -112,7 +99,7 @@ func syncParked(sites *store.Sites) {
 				continue
 			}
 			path := filepath.Join(dir, name)
-			sites.Sites[name] = store.Site{Path: path, Driver: detectDriver(path)}
+			sites.Sites[name] = store.Site{Path: path, Driver: DetectDriver(path)}
 		}
 	}
 }
@@ -126,20 +113,8 @@ func containsString(list []string, s string) bool {
 	return false
 }
 
-// writeAllSiteConfigs regenerates nginx configs for every registered site.
-func writeAllSiteConfigs(sites *store.Sites) error {
-	if err := writeDefaultSiteConfig(); err != nil {
-		return err
-	}
-	for name := range sites.Sites {
-		if err := writeSiteNginxConfig(sites, name); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func cmdLink(args []string) error {
+// nginx.WriteAllSiteConfigs regenerates nginx configs for every registered site.
+func CmdLink(args []string) error {
 	fs := flag.NewFlagSet("link", flag.ExitOnError)
 	name := fs.String("name", "", "site name (default: directory name)")
 	php := fs.String("php", "", "pin PHP version for this site")
@@ -157,7 +132,7 @@ func cmdLink(args []string) error {
 	if siteName == "" {
 		siteName = filepath.Base(cwd)
 	}
-	if !safeSiteNameRe.MatchString(siteName) {
+	if !store.SafeSiteNameRe.MatchString(siteName) {
 		return fmt.Errorf("invalid site name %q (use [a-z0-9._-])", siteName)
 	}
 	sites, err := store.LoadSites()
@@ -167,27 +142,27 @@ func cmdLink(args []string) error {
 	if _, exists := sites.Sites[siteName]; exists {
 		return fmt.Errorf("site %s already linked (unlink first)", siteName)
 	}
-	site := store.Site{Path: cwd, Driver: detectDriver(cwd)}
+	site := store.Site{Path: cwd, Driver: DetectDriver(cwd)}
 	if *php != "" {
 		site.PHP = *php
-	} else if m, err := loadManifestFrom(cwd); err == nil && m.PHP != "" {
+	} else if m, err := nginx.LoadManifestFrom(cwd); err == nil && m.PHP != "" {
 		site.PHP = m.PHP
 	}
 	sites.Sites[siteName] = site
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	if err := writeSiteNginxConfig(sites, siteName); err != nil {
+	if err := nginx.WriteSiteNginxConfig(sites, siteName); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v (run `sudo xpier install` first?)\n", err)
 	}
-	fmt.Printf("linked %s -> %s (driver %s, php %s)\n", siteDomain(sites, siteName), cwd, site.Driver, site.PHP)
+	fmt.Printf("linked %s -> %s (driver %s, php %s)\n", store.SiteDomain(sites, siteName), cwd, site.Driver, site.PHP)
 	return nil
 }
 
-func cmdUnlink(args []string) error {
+func CmdUnlink(args []string) error {
 	fs := flag.NewFlagSet("unlink", flag.ExitOnError)
 	name := fs.String("name", "", "site name (default: directory name)")
 	if err := fs.Parse(args); err != nil {
@@ -215,17 +190,17 @@ func cmdUnlink(args []string) error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	if err := removeSiteNginxConfig(siteName); err != nil {
+	if err := nginx.RemoveSiteNginxConfig(siteName); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
-	fmt.Printf("unlinked %s\n", siteDomain(sites, siteName))
+	fmt.Printf("unlinked %s\n", store.SiteDomain(sites, siteName))
 	return nil
 }
 
-func cmdSitePHP(args []string) error {
+func CmdSitePHP(args []string) error {
 	fs := flag.NewFlagSet("site:php", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -248,25 +223,25 @@ func cmdSitePHP(args []string) error {
 		if err := sites.Save(); err != nil {
 			return err
 		}
-		if err := writeSiteNginxConfig(sites, siteName); err != nil {
+		if err := nginx.WriteSiteNginxConfig(sites, siteName); err != nil {
 			return err
 		}
-		if err := nginxReload(); err != nil {
+		if err := nginx.NginxReload(); err != nil {
 			fmt.Printf("[warn] nginx reload failed: %v\n", err)
 		}
-		fmt.Printf("%s -> php %s\n", siteDomain(sites, siteName), site.PHP)
+		fmt.Printf("%s -> php %s\n", store.SiteDomain(sites, siteName), site.PHP)
 		return nil
 	}
-	fmt.Printf("%s -> php %s\n", siteDomain(sites, siteName), site.PHP)
+	fmt.Printf("%s -> php %s\n", store.SiteDomain(sites, siteName), site.PHP)
 	return nil
 }
 
-func cmdSites(args []string) error {
+func CmdSites(args []string) error {
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	syncParked(sites)
+	SyncParked(sites)
 	if err := sites.Save(); err != nil {
 		return err
 	}
@@ -275,10 +250,10 @@ func cmdSites(args []string) error {
 		nginxUp = true
 	}
 	dnsUp := false
-	if b, _ := udpBusy("53"); b {
+	if b, _ := store.UDPBusy("53"); b {
 		dnsUp = true
 	}
-	fmt.Printf("nginx: %s | dnsmasq: %s | %d site(s)\n", upDown(nginxUp), upDown(dnsUp), len(sites.Sites))
+	fmt.Printf("nginx: %s | dnsmasq: %s | %d site(s)\n", store.UpDown(nginxUp), store.UpDown(dnsUp), len(sites.Sites))
 	names := make([]string, 0, len(sites.Sites))
 	for name := range sites.Sites {
 		names = append(names, name)
@@ -288,18 +263,11 @@ func cmdSites(args []string) error {
 		site := sites.Sites[name]
 		php := site.PHP
 		if php == "" {
-			php = defaultPhpVersion()
+			php = nginx.DefaultPhpVersion()
 		}
-		up := fpmRunning(php)
+		up := service.FpmRunning(php)
 		fmt.Printf("  %-30s driver=%-7s php=%-4s fpm=%s path=%s\n",
-			siteDomain(sites, name), site.Driver, php, upDown(up), site.Path)
+			store.SiteDomain(sites, name), site.Driver, php, store.UpDown(up), site.Path)
 	}
 	return nil
-}
-
-func upDown(up bool) string {
-	if up {
-		return "up"
-	}
-	return "down"
 }

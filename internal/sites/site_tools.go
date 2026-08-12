@@ -1,4 +1,4 @@
-package xpier
+package sites
 
 import (
 	"flag"
@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
-// resolveSite returns the site for the current directory (by basename), or an
+// ResolveSite returns the site for the current directory (by basename), or an
 // explicit --site name.
-func resolveSite(sites *store.Sites, siteName string) (string, store.Site, error) {
+func ResolveSite(sites *store.Sites, siteName string) (string, store.Site, error) {
 	if siteName != "" {
 		if s, ok := sites.Sites[siteName]; ok {
 			return siteName, s, nil
@@ -41,11 +42,11 @@ func resolveSite(sites *store.Sites, siteName string) (string, store.Site, error
 	return "", store.Site{}, fmt.Errorf("no site for current directory; link it with `xpier link` or pass --site")
 }
 
-// sitePHPBin resolves the php binary for a site (pinned version, manifest, or default).
-func sitePHPBin(site store.Site) (string, string, error) {
+// SitePHPBin resolves the php binary for a site (pinned version, manifest, or default).
+func SitePHPBin(site store.Site) (string, string, error) {
 	ver := site.PHP
 	if ver == "" {
-		ver = defaultPhpVersion()
+		ver = nginx.DefaultPhpVersion()
 	}
 	bin := filepath.Join(store.BrewPrefix(), "opt", "php@"+ver, "bin", "php")
 	if !store.FileExists(bin) {
@@ -54,7 +55,7 @@ func sitePHPBin(site store.Site) (string, string, error) {
 	return bin, ver, nil
 }
 
-func cmdIsolate(args []string) error {
+func CmdIsolate(args []string) error {
 	fs := flag.NewFlagSet("isolate", flag.ExitOnError)
 	siteFlag := fs.String("site", "", "site name (default: current directory)")
 	if err := fs.Parse(args); err != nil {
@@ -64,14 +65,14 @@ func cmdIsolate(args []string) error {
 		return fmt.Errorf("usage: xpier isolate <php-version> [--site x]")
 	}
 	ver := fs.Arg(0)
-	if !safePhpRe.MatchString(ver) {
+	if !store.SafePhpRe.MatchString(ver) {
 		return fmt.Errorf("invalid php version %q", ver)
 	}
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	name, site, err := resolveSite(sites, *siteFlag)
+	name, site, err := ResolveSite(sites, *siteFlag)
 	if err != nil {
 		return err
 	}
@@ -80,17 +81,17 @@ func cmdIsolate(args []string) error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	if err := writeSiteNginxConfig(sites, name); err != nil {
+	if err := nginx.WriteSiteNginxConfig(sites, name); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
-	fmt.Printf("%s isolated to php %s\n", siteDomain(sites, name), ver)
+	fmt.Printf("%s isolated to php %s\n", store.SiteDomain(sites, name), ver)
 	return nil
 }
 
-func cmdUnisolate(args []string) error {
+func CmdUnisolate(args []string) error {
 	fs := flag.NewFlagSet("unisolate", flag.ExitOnError)
 	siteFlag := fs.String("site", "", "site name (default: current directory)")
 	if err := fs.Parse(args); err != nil {
@@ -100,7 +101,7 @@ func cmdUnisolate(args []string) error {
 	if err != nil {
 		return err
 	}
-	name, site, err := resolveSite(sites, *siteFlag)
+	name, site, err := ResolveSite(sites, *siteFlag)
 	if err != nil {
 		return err
 	}
@@ -109,17 +110,17 @@ func cmdUnisolate(args []string) error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	if err := writeSiteNginxConfig(sites, name); err != nil {
+	if err := nginx.WriteSiteNginxConfig(sites, name); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
-	fmt.Printf("%s unisolated (php %s)\n", siteDomain(sites, name), defaultPhpVersion())
+	fmt.Printf("%s unisolated (php %s)\n", store.SiteDomain(sites, name), nginx.DefaultPhpVersion())
 	return nil
 }
 
-func cmdIsolated(args []string) error {
+func CmdIsolated(args []string) error {
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
@@ -136,14 +137,14 @@ func cmdIsolated(args []string) error {
 		return nil
 	}
 	for _, name := range names {
-		fmt.Printf("  %-30s php %s\n", siteDomain(sites, name), sites.Sites[name].PHP)
+		fmt.Printf("  %-30s php %s\n", store.SiteDomain(sites, name), sites.Sites[name].PHP)
 	}
 	return nil
 }
 
-// extractSiteFlag pulls --site=x / --site x out of arbitrary command args,
+// ExtractSiteFlag pulls --site=x / --site x out of arbitrary command args,
 // leaving everything else untouched for passthrough (php -r, etc).
-func extractSiteFlag(args []string) (site string, rest []string) {
+func ExtractSiteFlag(args []string) (site string, rest []string) {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		switch {
@@ -161,16 +162,16 @@ func extractSiteFlag(args []string) (site string, rest []string) {
 
 // runSitePHP proxies a command to the site's PHP binary (like `herd php`).
 func runSitePHP(args []string, extra []string) error {
-	siteName, passthrough := extractSiteFlag(args)
+	siteName, passthrough := ExtractSiteFlag(args)
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	_, site, err := resolveSite(sites, siteName)
+	_, site, err := ResolveSite(sites, siteName)
 	if err != nil {
 		return err
 	}
-	bin, ver, err := sitePHPBin(site)
+	bin, ver, err := SitePHPBin(site)
 	if err != nil {
 		return err
 	}
@@ -186,19 +187,19 @@ func runSitePHP(args []string, extra []string) error {
 	return nil
 }
 
-func cmdSitePHPProxy(args []string) error { return runSitePHP(args, nil) }
+func CmdSitePHPProxy(args []string) error { return runSitePHP(args, nil) }
 
-func cmdSiteComposer(args []string) error {
-	siteName, passthrough := extractSiteFlag(args)
+func CmdSiteComposer(args []string) error {
+	siteName, passthrough := ExtractSiteFlag(args)
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	_, site, err := resolveSite(sites, siteName)
+	_, site, err := ResolveSite(sites, siteName)
 	if err != nil {
 		return err
 	}
-	bin, ver, err := sitePHPBin(site)
+	bin, ver, err := SitePHPBin(site)
 	if err != nil {
 		return err
 	}
@@ -217,15 +218,15 @@ func cmdSiteComposer(args []string) error {
 	return nil
 }
 
-func cmdSiteDebug(args []string) error {
+func CmdSiteDebug(args []string) error {
 	return runSitePHP(args, []string{"-d", "xdebug.mode=debug", "-d", "xdebug.start_with_request=yes"})
 }
 
-func cmdSiteCoverage(args []string) error {
+func CmdSiteCoverage(args []string) error {
 	return runSitePHP(args, []string{"-d", "xdebug.mode=coverage"})
 }
 
-func cmdOpen(args []string) error {
+func CmdOpen(args []string) error {
 	fs := flag.NewFlagSet("open", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -239,11 +240,11 @@ func cmdOpen(args []string) error {
 		cwd, _ := os.Getwd()
 		name = filepath.Base(cwd)
 	}
-	url := "http://" + siteDomain(sites, name)
-	return runOutErr("open", url)
+	url := "http://" + store.SiteDomain(sites, name)
+	return store.RunOutErr("open", url)
 }
 
-func cmdEdit(args []string) error {
+func CmdEdit(args []string) error {
 	fs := flag.NewFlagSet("edit", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -271,10 +272,10 @@ func cmdEdit(args []string) error {
 			return fmt.Errorf("no editor found; set $EDITOR")
 		}
 	}
-	return runOutErr(editor, site.Path)
+	return store.RunOutErr(editor, site.Path)
 }
 
-func cmdSiteInformation(args []string) error {
+func CmdSiteInformation(args []string) error {
 	fs := flag.NewFlagSet("site-information", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -294,9 +295,9 @@ func cmdSiteInformation(args []string) error {
 	}
 	php := site.PHP
 	if php == "" {
-		php = defaultPhpVersion()
+		php = nginx.DefaultPhpVersion()
 	}
-	fmt.Printf("domain:  %s\n", siteDomain(sites, name))
+	fmt.Printf("domain:  %s\n", store.SiteDomain(sites, name))
 	fmt.Printf("path:    %s\n", site.Path)
 	fmt.Printf("driver:  %s\n", site.Driver)
 	fmt.Printf("php:     %s\n", php)
@@ -304,7 +305,7 @@ func cmdSiteInformation(args []string) error {
 	return nil
 }
 
-func cmdTLD(args []string) error {
+func CmdTLD(args []string) error {
 	fs := flag.NewFlagSet("tld", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -315,14 +316,14 @@ func cmdTLD(args []string) error {
 	}
 	if fs.NArg() > 0 {
 		tld := strings.TrimPrefix(fs.Arg(0), ".")
-		if !safeSiteNameRe.MatchString(tld) {
+		if !store.SafeSiteNameRe.MatchString(tld) {
 			return fmt.Errorf("invalid tld %q", tld)
 		}
 		sites.TLD = tld
 		if err := sites.Save(); err != nil {
 			return err
 		}
-		if err := writeDnsmasqConfig(tld); err != nil {
+		if err := store.WriteDnsmasqConfig(tld); err != nil {
 			return err
 		}
 		fmt.Printf("tld set to .%s (dnsmasq config updated; run `sudo xpier install` to apply DNS)\n", tld)
@@ -332,7 +333,7 @@ func cmdTLD(args []string) error {
 	return nil
 }
 
-func cmdLoopback(args []string) error {
+func CmdLoopback(args []string) error {
 	fs := flag.NewFlagSet("loopback", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -351,7 +352,7 @@ func cmdLoopback(args []string) error {
 	return nil
 }
 
-func cmdLinks(args []string) error {
+func CmdLinks(args []string) error {
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
@@ -362,12 +363,12 @@ func cmdLinks(args []string) error {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		fmt.Printf("  %-30s %s\n", siteDomain(sites, name), sites.Sites[name].Path)
+		fmt.Printf("  %-30s %s\n", store.SiteDomain(sites, name), sites.Sites[name].Path)
 	}
 	return nil
 }
 
-func cmdParked(args []string) error {
+func CmdParked(args []string) error {
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err

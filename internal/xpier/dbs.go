@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"xpier/internal/nginx"
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
 
@@ -40,11 +42,11 @@ func cmdDBInstall(args []string) error {
 	if err != nil {
 		return err
 	}
-	if out, err := brewAsUser("list", "--versions", formula); err == nil && strings.Contains(out, formula) {
+	if out, err := service.BrewAsUser("list", "--versions", formula); err == nil && strings.Contains(out, formula) {
 		fmt.Printf("%s already installed\n", formula)
 	} else {
 		fmt.Printf("installing %s via brew...\n", formula)
-		if out, err := brewAsUser("install", formula); err != nil {
+		if out, err := service.BrewAsUser("install", formula); err != nil {
 			return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
 		}
 	}
@@ -63,7 +65,7 @@ func cmdDBStart(args []string) error {
 	if err != nil {
 		return err
 	}
-	if out, err := brewAsUser("list", "--versions", formula); err != nil || !strings.Contains(out, formula) {
+	if out, err := service.BrewAsUser("list", "--versions", formula); err != nil || !strings.Contains(out, formula) {
 		ok, err := store.ConfirmYesNo(fmt.Sprintf("%s 未安装（brew install %s），是否现在安装？", formula, formula))
 		if err != nil {
 			return err
@@ -72,11 +74,11 @@ func cmdDBStart(args []string) error {
 			return fmt.Errorf("%s not installed; run `xpier db:install %s` first", formula, fs.Arg(0))
 		}
 		fmt.Printf("installing %s...\n", formula)
-		if out, err := brewAsUser("install", formula); err != nil {
+		if out, err := service.BrewAsUser("install", formula); err != nil {
 			return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
 		}
 	}
-	if out, err := brewAsUser("services", "start", formula); err != nil {
+	if out, err := service.BrewAsUser("services", "start", formula); err != nil {
 		return fmt.Errorf("brew services start %s: %v: %s", formula, err, out)
 	}
 	fmt.Printf("%s started (brew services)\n", formula)
@@ -95,7 +97,7 @@ func cmdDBStop(args []string) error {
 	if err != nil {
 		return err
 	}
-	if out, err := brewAsUser("services", "stop", formula); err != nil {
+	if out, err := service.BrewAsUser("services", "stop", formula); err != nil {
 		return fmt.Errorf("brew services stop %s: %v: %s", formula, err, out)
 	}
 	fmt.Printf("%s stopped\n", formula)
@@ -112,7 +114,7 @@ func cmdDBCreate(args []string) error {
 		return fmt.Errorf("usage: xpier db:create <name> [--db mysql]")
 	}
 	name := fs.Arg(0)
-	if !safeSiteNameRe.MatchString(name) {
+	if !store.SafeSiteNameRe.MatchString(name) {
 		return fmt.Errorf("invalid database name %q", name)
 	}
 	switch *svc {
@@ -160,7 +162,7 @@ func ensureAdminerSite() error {
 			return err
 		}
 	}
-	return writeSiteNginxConfig(sites, "database")
+	return nginx.WriteSiteNginxConfig(sites, "database")
 }
 
 func cmdDB(args []string) error {
@@ -176,5 +178,5 @@ func cmdDB(args []string) error {
 		siteName = fs.Arg(0) // open a specific site's db via adminer
 	}
 	_ = siteName
-	return runOutErr("open", "http://database.test/")
+	return store.RunOutErr("open", "http://database.test/")
 }

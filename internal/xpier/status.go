@@ -3,6 +3,7 @@ package xpier
 import (
 	"fmt"
 	"os"
+	"xpier/internal/apps"
 	"xpier/internal/store"
 )
 
@@ -18,7 +19,7 @@ func cmdStatus(args []string) error {
 	} else {
 		fmt.Printf("manifest %s:\n", manifestPath)
 		fmt.Printf("  php %s, runtime %s\n", m.PHP, m.Runtime)
-		for _, ext := range sortedKeys(m.Extensions) {
+		for _, ext := range store.SortedKeys(m.Extensions) {
 			fmt.Printf("  ext %s: %s\n", ext, m.Extensions[ext])
 		}
 		for _, svc := range m.Services {
@@ -43,8 +44,8 @@ func cmdStatus(args []string) error {
 		}
 	}
 	// store.App stack table (dev.yaml / xpier.yaml apps).
-	if _, _, err := loadAppConfig(); err == nil {
-		cmdAppStatus(nil)
+	if _, _, err := apps.LoadAppConfig(); err == nil {
+		apps.CmdStatus(nil)
 	}
 	return nil
 }

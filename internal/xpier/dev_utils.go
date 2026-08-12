@@ -8,21 +8,24 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"xpier/internal/nginx"
+	"xpier/internal/service"
+	sitepkg "xpier/internal/sites"
 	"xpier/internal/store"
 )
 
 // cmdTinker runs Laravel Tinker with the site's PHP.
 func cmdTinker(args []string) error {
-	siteName, passthrough := extractSiteFlag(args)
+	siteName, passthrough := sitepkg.ExtractSiteFlag(args)
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	_, site, err := resolveSite(sites, siteName)
+	_, site, err := sitepkg.ResolveSite(sites, siteName)
 	if err != nil {
 		return err
 	}
-	bin, ver, err := sitePHPBin(site)
+	bin, ver, err := sitepkg.SitePHPBin(site)
 	if err != nil {
 		return err
 	}
@@ -59,7 +62,7 @@ func cmdDirectoryListing(args []string) error {
 			return fmt.Errorf("usage: xpier directory-listing [on|off]")
 		}
 	}
-	confPath := filepath.Join(nginxHome(), "nginx.conf")
+	confPath := filepath.Join(nginx.NginxHome(), "nginx.conf")
 	data, err := os.ReadFile(confPath)
 	if err != nil {
 		return err
@@ -76,7 +79,7 @@ func cmdDirectoryListing(args []string) error {
 	if err := os.WriteFile(confPath, []byte(content), 0o644); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		return fmt.Errorf("reload failed: %w", err)
 	}
 	fmt.Printf("directory listing %s\n", map[bool]string{true: "ON", false: "OFF"}[on])
@@ -101,7 +104,7 @@ func cmdForget(args []string) error {
 	for name, site := range sites.Sites {
 		if p, err := filepath.Abs(site.Path); err == nil && p == absCwd {
 			delete(sites.Sites, name)
-			removeSiteNginxConfig(name)
+			nginx.RemoveSiteNginxConfig(name)
 			break
 		}
 	}
@@ -115,7 +118,7 @@ func cmdForget(args []string) error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
 	fmt.Printf("forgot %s\n", absCwd)
@@ -137,7 +140,7 @@ func cmdIsolateNode(args []string) error {
 	if err != nil {
 		return err
 	}
-	name, site, err := resolveSite(sites, *siteFlag)
+	name, site, err := sitepkg.ResolveSite(sites, *siteFlag)
 	if err != nil {
 		return err
 	}
@@ -146,7 +149,7 @@ func cmdIsolateNode(args []string) error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	fmt.Printf("%s node -> %s\n", siteDomain(sites, name), site.Node)
+	fmt.Printf("%s node -> %s\n", store.SiteDomain(sites, name), site.Node)
 	return nil
 }
 
@@ -160,7 +163,7 @@ func cmdUnisolateNode(args []string) error {
 	if err != nil {
 		return err
 	}
-	name, site, err := resolveSite(sites, *siteFlag)
+	name, site, err := sitepkg.ResolveSite(sites, *siteFlag)
 	if err != nil {
 		return err
 	}
@@ -169,7 +172,7 @@ func cmdUnisolateNode(args []string) error {
 	if err := sites.Save(); err != nil {
 		return err
 	}
-	fmt.Printf("%s node unisolated\n", siteDomain(sites, name))
+	fmt.Printf("%s node unisolated\n", store.SiteDomain(sites, name))
 	return nil
 }
 
@@ -190,18 +193,18 @@ func cmdIsolatedNode(args []string) error {
 		return nil
 	}
 	for _, name := range names {
-		fmt.Printf("  %-30s node %s\n", siteDomain(sites, name), sites.Sites[name].Node)
+		fmt.Printf("  %-30s node %s\n", store.SiteDomain(sites, name), sites.Sites[name].Node)
 	}
 	return nil
 }
 
 func cmdNode(args []string) error {
-	siteName, passthrough := extractSiteFlag(args)
+	siteName, passthrough := sitepkg.ExtractSiteFlag(args)
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
 	}
-	_, site, err := resolveSite(sites, siteName)
+	_, site, err := sitepkg.ResolveSite(sites, siteName)
 	if err != nil {
 		return err
 	}
@@ -225,7 +228,7 @@ func cmdNode(args []string) error {
 // cmdIni opens a PHP version's php.ini (Herd's `herd ini` equivalent).
 func cmdIni(args []string) error {
 	fs := flag.NewFlagSet("ini", flag.ExitOnError)
-	ver := fs.String("php", defaultPhpVersion(), "php version")
+	ver := fs.String("php", nginx.DefaultPhpVersion(), "php version")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -233,7 +236,7 @@ func cmdIni(args []string) error {
 	if !store.FileExists(ini) {
 		return fmt.Errorf("php.ini not found at %s", ini)
 	}
-	return showConfig(ini)
+	return service.ShowConfig(ini)
 }
 
 // cmdCompletion prints a basic shell completion for subcommands.

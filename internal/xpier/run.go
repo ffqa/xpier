@@ -1,6 +1,14 @@
 package xpier
 
-import "errors"
+import (
+	"errors"
+
+	"xpier/internal/apps"
+	"xpier/internal/ca"
+	"xpier/internal/service"
+	"xpier/internal/share"
+	"xpier/internal/sites"
+)
 
 // ErrUsage signals that usage was printed; the caller should exit non-zero
 // without printing an extra error line.
@@ -21,69 +29,69 @@ func Run(args []string) error {
 	case "status":
 		return cmdStatus(args[1:])
 	case "up":
-		return cmdUp(args[1:])
+		return apps.CmdUp(args[1:])
 	case "down":
-		return cmdDown(args[1:])
+		return apps.CmdDown(args[1:])
 	case "start":
-		return cmdAppStart(args[1:])
+		return apps.CmdStart(args[1:])
 	case "restart":
-		return cmdAppRestart(args[1:])
+		return apps.CmdRestart(args[1:])
 	case "log":
-		return cmdAppLog(args[1:])
+		return apps.CmdLog(args[1:])
 	case "logs":
-		return cmdAppLogsAll(args[1:])
+		return apps.CmdLogsAll(args[1:])
 	case "url":
-		return cmdAppURL(args[1:])
+		return apps.CmdURL(args[1:])
 	case "install":
-		return cmdInstall(args[1:])
+		return service.CmdInstall(args[1:])
 	case "refresh":
 		return cmdRefresh(args[1:])
 	case "link":
-		return cmdLink(args[1:])
+		return sites.CmdLink(args[1:])
 	case "unlink":
-		return cmdUnlink(args[1:])
+		return sites.CmdUnlink(args[1:])
 	case "park":
-		return cmdPark(args[1:])
+		return sites.CmdPark(args[1:])
 	case "sites":
-		return cmdSites(args[1:])
+		return sites.CmdSites(args[1:])
 	case "sites:up":
-		return cmdSitesUp(args[1:])
+		return sites.CmdSitesUp(args[1:])
 	case "sites:down":
-		return cmdSitesDown(args[1:])
+		return sites.CmdSitesDown(args[1:])
 	case "site:php":
-		return cmdSitePHP(args[1:])
+		return sites.CmdSitePHP(args[1:])
 	case "isolate":
-		return cmdIsolate(args[1:])
+		return sites.CmdIsolate(args[1:])
 	case "unisolate":
-		return cmdUnisolate(args[1:])
+		return sites.CmdUnisolate(args[1:])
 	case "isolated":
-		return cmdIsolated(args[1:])
+		return sites.CmdIsolated(args[1:])
 	case "php":
-		return cmdSitePHPProxy(args[1:])
+		return sites.CmdSitePHPProxy(args[1:])
 	case "composer":
-		return cmdSiteComposer(args[1:])
+		return sites.CmdSiteComposer(args[1:])
 	case "debug":
-		return cmdSiteDebug(args[1:])
+		return sites.CmdSiteDebug(args[1:])
 	case "coverage":
-		return cmdSiteCoverage(args[1:])
+		return sites.CmdSiteCoverage(args[1:])
 	case "open":
-		return cmdOpen(args[1:])
+		return sites.CmdOpen(args[1:])
 	case "edit":
-		return cmdEdit(args[1:])
+		return sites.CmdEdit(args[1:])
 	case "site-information":
-		return cmdSiteInformation(args[1:])
+		return sites.CmdSiteInformation(args[1:])
 	case "tld":
-		return cmdTLD(args[1:])
+		return sites.CmdTLD(args[1:])
 	case "loopback":
-		return cmdLoopback(args[1:])
+		return sites.CmdLoopback(args[1:])
 	case "links":
-		return cmdLinks(args[1:])
+		return sites.CmdLinks(args[1:])
 	case "parked":
-		return cmdParked(args[1:])
+		return sites.CmdParked(args[1:])
 	case "secure":
-		return cmdSecure(args[1:])
+		return ca.CmdSecure(args[1:])
 	case "secured":
-		return cmdSecured(args[1:])
+		return ca.CmdSecured(args[1:])
 	case "proxy":
 		return cmdProxy(args[1:])
 	case "proxies":
@@ -101,11 +109,11 @@ func Run(args []string) error {
 	case "db":
 		return cmdDB(args[1:])
 	case "share":
-		return cmdShare(args[1:])
+		return share.CmdShare(args[1:])
 	case "shares":
-		return cmdShares(args[1:])
+		return share.CmdShares(args[1:])
 	case "share:stop":
-		return cmdShareStop(args[1:])
+		return share.CmdShareStop(args[1:])
 	case "mail:up":
 		return cmdMailUp(args[1:])
 	case "mail:down":
@@ -133,13 +141,13 @@ func Run(args []string) error {
 	case "fetch-share-url":
 		return cmdFetchShareURL(args[1:])
 	case "services":
-		return cmdServices(args[1:])
+		return service.CmdServices(args[1:])
 	case "services:stop":
-		return cmdServicesStop(args[1:])
+		return service.CmdServicesStop(args[1:])
 	case "services:start":
-		return cmdServicesStart(args[1:])
+		return service.CmdServicesStart(args[1:])
 	case "service":
-		return cmdService(args[1:])
+		return service.CmdService(args[1:])
 	case "ini":
 		return cmdIni(args[1:])
 	case "help", "-h", "--help":

@@ -1,4 +1,4 @@
-package xpier
+package ca
 
 import (
 	"fmt"
@@ -6,18 +6,19 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
-func caPaths() (string, string) {
+func CaPaths() (string, string) {
 	return filepath.Join(store.XpierHome(), "ca", "xpier-ca.pem"),
 		filepath.Join(store.XpierHome(), "ca", "xpier-ca-key.pem")
 }
 
-// ensureCA generates a local CA (if missing) so site certs can be trusted by
+// EnsureCA generates a local CA (if missing) so site certs can be trusted by
 // the system keychain with no browser warnings.
-func ensureCA() error {
-	cert, key := caPaths()
+func EnsureCA() error {
+	cert, key := CaPaths()
 	if store.FileExists(cert) && store.FileExists(key) {
 		return nil
 	}
@@ -36,10 +37,10 @@ func ensureCA() error {
 	return nil
 }
 
-// trustCA installs the CA into the system keychain (requires root).
-func trustCA() error {
-	cert, _ := caPaths()
-	if err := ensureCA(); err != nil {
+// TrustCA installs the CA into the system keychain (requires root).
+func TrustCA() error {
+	cert, _ := CaPaths()
+	if err := EnsureCA(); err != nil {
 		return err
 	}
 	if os.Geteuid() != 0 {
@@ -53,15 +54,15 @@ func trustCA() error {
 	return nil
 }
 
-// ensureWildcardCertSignedByCA replaces the self-signed wildcard cert with one
+// EnsureWildcardCertSignedByCA replaces the self-signed wildcard cert with one
 // signed by the xpier CA once the CA exists.
-func ensureWildcardCertSignedByCA(tld string) error {
-	cert, key := certPaths(tld)
+func EnsureWildcardCertSignedByCA(tld string) error {
+	cert, key := nginx.CertPaths(tld)
 	if store.FileExists(cert) && store.FileExists(key) {
 		// Already present; leave it (first secure run replaces it).
 		return nil
 	}
-	caCert, caKey := caPaths()
+	caCert, caKey := CaPaths()
 	if !store.FileExists(caCert) {
 		return nil // CA not created yet; keep self-signed
 	}
@@ -97,20 +98,15 @@ func ensureWildcardCertSignedByCA(tld string) error {
 	return nil
 }
 
-// domainCertPaths returns cert/key paths for a specific domain.
-func domainCertPaths(domain string) (string, string) {
-	return filepath.Join(store.XpierHome(), "certs", domain+".pem"),
-		filepath.Join(store.XpierHome(), "certs", domain+"-key.pem")
-}
-
-// ensureDomainCert signs a cert for a specific domain (SAN: domain + wildcard
+// nginx.DomainCertPaths returns cert/key paths for a specific domain.
+// EnsureDomainCert signs a cert for a specific domain (SAN: domain + wildcard
 // of its base, e.g. img.test28.test -> *.test28.test) with the xpier CA.
-func ensureDomainCert(domain string) error {
-	cert, key := domainCertPaths(domain)
+func EnsureDomainCert(domain string) error {
+	cert, key := nginx.DomainCertPaths(domain)
 	if store.FileExists(cert) && store.FileExists(key) {
 		return nil
 	}
-	caCert, caKey := caPaths()
+	caCert, caKey := CaPaths()
 	if !store.FileExists(caCert) {
 		return fmt.Errorf("xpier CA missing; run `sudo xpier secure` first")
 	}
@@ -153,19 +149,19 @@ func ensureDomainCert(domain string) error {
 	return nil
 }
 
-// cmdSecure trusts the xpier CA and signs certs. With a domain argument it
+// CmdSecure trusts the xpier CA and signs certs. With a domain argument it
 // signs a per-domain cert (e.g. `xpier secure img.test28`), otherwise it
 // signs the *.test wildcard cert.
-func cmdSecure(args []string) error {
+func CmdSecure(args []string) error {
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("`xpier secure` must run as root: use `sudo xpier secure`")
 	}
-	if err := trustCA(); err != nil {
+	if err := TrustCA(); err != nil {
 		return err
 	}
 	if len(args) > 0 {
 		arg := strings.TrimPrefix(args[0], ".")
-		if !safeSiteNameRe.MatchString(arg) {
+		if !store.SafeSiteNameRe.MatchString(arg) {
 			return fmt.Errorf("invalid domain %q", arg)
 		}
 		// Resolve the full domain: a linked site name becomes
@@ -173,12 +169,12 @@ func cmdSecure(args []string) error {
 		domain := arg
 		if sites, err := store.LoadSites(); err == nil {
 			if _, ok := sites.Sites[arg]; ok {
-				domain = siteDomain(sites, arg)
+				domain = store.SiteDomain(sites, arg)
 			} else if !strings.HasSuffix(arg, "."+sites.TLD) {
 				domain = arg + "." + sites.TLD
 			}
 		}
-		if err := ensureDomainCert(domain); err != nil {
+		if err := EnsureDomainCert(domain); err != nil {
 			return err
 		}
 		if base := strings.SplitN(domain, ".", 2); len(base) == 2 {
@@ -188,25 +184,25 @@ func cmdSecure(args []string) error {
 		}
 	} else {
 		// Drop the existing self-signed cert so it gets re-signed by the CA.
-		cert, _ := certPaths("test")
+		cert, _ := nginx.CertPaths("test")
 		os.Remove(cert)
-		if err := ensureWildcardCertSignedByCA("test"); err != nil {
+		if err := EnsureWildcardCertSignedByCA("test"); err != nil {
 			return err
 		}
 		fmt.Println("xpier CA trusted; *.test certs are now signed by it (browsers will not warn)")
 	}
-	if err := nginxReload(); err != nil {
+	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v\n", err)
 	}
 	// Regenerate site configs so they pick up the freshly signed cert.
 	if sites, err := store.LoadSites(); err == nil {
-		writeAllSiteConfigs(sites)
-		nginxReload()
+		nginx.WriteAllSiteConfigs(sites)
+		nginx.NginxReload()
 	}
 	return nil
 }
 
-func cmdSecured(args []string) error {
+func CmdSecured(args []string) error {
 	sites, err := store.LoadSites()
 	if err != nil {
 		return err
@@ -216,7 +212,7 @@ func cmdSecured(args []string) error {
 		names = append(names, name)
 	}
 	for _, name := range names {
-		fmt.Printf("  %-30s https://%s\n", siteDomain(sites, name), siteDomain(sites, name))
+		fmt.Printf("  %-30s https://%s\n", store.SiteDomain(sites, name), store.SiteDomain(sites, name))
 	}
 	return nil
 }

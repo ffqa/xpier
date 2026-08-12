@@ -1,4 +1,4 @@
-package xpier
+package service
 
 import (
 	"fmt"
@@ -7,50 +7,21 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
-func currentUser() (*user.User, error) {
+func CurrentUser() (*user.User, error) {
 	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" && os.Geteuid() == 0 {
 		return user.Lookup(sudoUser)
 	}
 	return user.Current()
 }
 
-// udpBusy reports whether something is listening on a UDP port (dnsmasq).
-func udpBusy(port string) (bool, error) {
-	out, err := store.RunOut("lsof", "-ti", "udp:"+port)
-	if err != nil && out == "" {
-		return false, nil
-	}
-	return strings.TrimSpace(out) != "", nil
-}
-
-func dnsmasqConfPath() string {
-	return filepath.Join(store.XpierHome(), "dnsmasq", "dnsmasq.conf")
-}
-
-func writeDnsmasqConfig(tld string) error {
-	conf := fmt.Sprintf(`port=53
-listen-address=127.0.0.1
-bind-interfaces
-no-resolv
-address=/.%s/127.0.0.1
-`, tld)
-	if err := os.MkdirAll(filepath.Dir(dnsmasqConfPath()), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(dnsmasqConfPath(), []byte(conf), 0o644)
-}
-
-func certPaths(tld string) (string, string) {
-	return filepath.Join(store.XpierHome(), "certs", "wildcard."+tld+".pem"),
-		filepath.Join(store.XpierHome(), "certs", "wildcard."+tld+"-key.pem")
-}
-
-// ensureWildcardCert generates a self-signed *.test wildcard cert if missing.
-func ensureWildcardCert(tld string) error {
-	cert, key := certPaths(tld)
+// store.UDPBusy reports whether something is listening on a UDP port (dnsmasq).
+// EnsureWildcardCert generates a self-signed *.test wildcard cert if missing.
+func EnsureWildcardCert(tld string) error {
+	cert, key := nginx.CertPaths(tld)
 	if store.FileExists(cert) && store.FileExists(key) {
 		return nil
 	}
@@ -68,9 +39,9 @@ func ensureWildcardCert(tld string) error {
 	return nil
 }
 
-func launchdDir() string { return "/Library/LaunchDaemons" }
+func LaunchdDir() string { return "/Library/LaunchDaemons" }
 
-func launchdPlist(label string, args ...string) string {
+func LaunchdPlist(label string, args ...string) string {
 	outLog := filepath.Join(store.XpierHome(), "logs", label+".out.log")
 	errLog := filepath.Join(store.XpierHome(), "logs", label+".err.log")
 	argv := ""
@@ -101,15 +72,15 @@ func launchdPlist(label string, args ...string) string {
 `, label, argv, outLog, errLog)
 }
 
-func launchdPlistNginx() string {
-	return launchdPlist("com.xpier.nginx", nginxBin(), "-c", filepath.Join(nginxHome(), "nginx.conf"), "-g", "daemon off;")
+func LaunchdPlistNginx() string {
+	return LaunchdPlist("com.xpier.nginx", nginx.NginxBin(), "-c", filepath.Join(nginx.NginxHome(), "nginx.conf"), "-g", "daemon off;")
 }
 
-func launchdPlistDnsmasq() string {
-	return launchdPlist("com.xpier.dnsmasq", dnsmasqBin(), "-C", dnsmasqConfPath(), "--keep-in-foreground")
+func LaunchdPlistDnsmasq() string {
+	return LaunchdPlist("com.xpier.dnsmasq", DnsmasqBin(), "-C", store.DnsmasqConfPath(), "--keep-in-foreground")
 }
 
-func dnsmasqBin() string {
+func DnsmasqBin() string {
 	// brew installs dnsmasq under sbin, not bin.
 	for _, p := range []string{
 		filepath.Join(store.BrewPrefix(), "opt", "dnsmasq", "sbin", "dnsmasq"),
@@ -123,23 +94,23 @@ func dnsmasqBin() string {
 	return "/usr/local/sbin/dnsmasq"
 }
 
-// ensureNginxSudoers writes a passwordless sudoers entry so the user can
+// EnsureNginxSudoers writes a passwordless sudoers entry so the user can
 // reload the root-owned nginx master without typing a password.
-func ensureNginxSudoers() error {
-	u, err := currentUser()
+func EnsureNginxSudoers() error {
+	u, err := CurrentUser()
 	if err != nil {
 		return err
 	}
-	confPath := filepath.Join(nginxHome(), "nginx.conf")
+	confPath := filepath.Join(nginx.NginxHome(), "nginx.conf")
 	content := fmt.Sprintf("%s ALL=(root) NOPASSWD: %s -s reload -c %s\n%s ALL=(root) NOPASSWD: %s -t -c %s\n",
-		u.Username, nginxBin(), confPath, u.Username, nginxBin(), confPath)
+		u.Username, nginx.NginxBin(), confPath, u.Username, nginx.NginxBin(), confPath)
 	return os.WriteFile("/etc/sudoers.d/xpier", []byte(content), 0o440)
 }
 
-func launchctlBootstrap(label, plistPath string) error {
+func LaunchctlBootstrap(label, plistPath string) error {
 	// A job left over from an earlier failed install can crash-loop; boot it
 	// out first so bootstrap starts from a clean slate.
-	runOutErr("launchctl", "bootout", "system/"+label)
+	store.RunOutErr("launchctl", "bootout", "system/"+label)
 	cmd := exec.Command("launchctl", "bootstrap", "system", plistPath)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -147,12 +118,7 @@ func launchctlBootstrap(label, plistPath string) error {
 	}
 	msg := string(out)
 	if strings.Contains(msg, "Bootstrap failed: 5") || strings.Contains(msg, "already bootstrapped") {
-		return runOutErr("launchctl", "kickstart", "-k", "system/"+label)
+		return store.RunOutErr("launchctl", "kickstart", "-k", "system/"+label)
 	}
 	return fmt.Errorf("launchctl bootstrap %s: %v: %s", label, err, msg)
-}
-
-func runOutErr(name string, args ...string) error {
-	_, err := store.RunOut(name, args...)
-	return err
 }
