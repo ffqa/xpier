@@ -3,6 +3,7 @@ package xpier
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"xpier/internal/store"
