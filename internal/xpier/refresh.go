@@ -33,6 +33,9 @@ func cmdRefresh(args []string) error {
 	if err := apps.RefreshNginxConfs(); err != nil {
 		return err
 	}
+	if err := apps.MigrateStateLogs(); err != nil {
+		return err
+	}
 	if err := nginx.NginxReload(); err != nil {
 		return err
 	}

@@ -386,3 +386,21 @@ func TestCmdAppInit(t *testing.T) {
 		t.Error("CmdInit on missing dir should error")
 	}
 }
+
+func TestMigrateStateLogs(t *testing.T) {
+	homeTemp(t)
+	s := &store.AppState{Name: "web", PID: 123, Log: "/old/.herdy/apps/ns/logs/dev-web.log", Port: "8080"}
+	if err := store.SaveAppState(s, "ns"); err != nil {
+		t.Fatal(err)
+	}
+	if err := MigrateStateLogs(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.LoadAppState("ns", "web")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Log != store.AppLogPath("ns", "web") {
+		t.Errorf("Log = %q, want %q", got.Log, store.AppLogPath("ns", "web"))
+	}
+}

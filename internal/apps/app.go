@@ -262,6 +262,43 @@ func removeAppNginxConf(ns, name string) {
 	os.Remove(appNginxConfPath(ns, name))
 }
 
+// MigrateStateLogs rewrites app state log paths that still point at an old
+// home (e.g. ~/.herdy -> ~/.xpier) to the computed location.
+func MigrateStateLogs() error {
+	root := filepath.Join(store.XpierHome(), "apps")
+	nsEntries, err := os.ReadDir(root)
+	if err != nil {
+		return nil
+	}
+	for _, ns := range nsEntries {
+		if !ns.IsDir() {
+			continue
+		}
+		states, err := os.ReadDir(filepath.Join(root, ns.Name()))
+		if err != nil {
+			continue
+		}
+		for _, f := range states {
+			if !strings.HasSuffix(f.Name(), ".json") {
+				continue
+			}
+			name := strings.TrimSuffix(f.Name(), ".json")
+			st, err := store.LoadAppState(ns.Name(), name)
+			if err != nil {
+				continue
+			}
+			want := store.AppLogPath(ns.Name(), name)
+			if st.Log != want {
+				st.Log = want
+				if err := store.SaveAppState(st, ns.Name()); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 // RefreshNginxConfs regenerates app proxy configs from saved app states
 // (used after the xpier home directory moved, so cert paths are current).
 func RefreshNginxConfs() error {
@@ -924,7 +961,18 @@ func CmdLogsAll(args []string) error {
 			continue
 		}
 		color := appLogColors[i%len(appLogColors)]
-		cmd := exec.Command("tail", "-f", s.Log)
+		logPath := s.Log
+		if logPath == "" || !store.FileExists(logPath) {
+			// State written before a home rename (e.g. ~/.herdy -> ~/.xpier)
+			// can point at a moved log; fall back to the computed path.
+			logPath = store.AppLogPath(ns, n)
+		}
+		if !store.FileExists(logPath) {
+			fmt.Printf("[warn] %s: log not found at %s\n", n, logPath)
+			continue
+		}
+		cmd := exec.Command("tail", "-f", logPath)
+		cmd.Stderr = os.Stderr // surface tail errors instead of failing silently
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			continue
