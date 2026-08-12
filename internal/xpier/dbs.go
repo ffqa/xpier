@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -193,12 +194,46 @@ func ensureAdminerSite() error {
 	return nil
 }
 
-// adminerURL builds the Adminer URL; an optional site name prefills the
-// database field (Laravel convention: database name == site name).
-func adminerURL(sites *store.Sites, siteName string) string {
+// detectMySQLServer inspects the running mysqld (brew, DBngin, ...) and
+// returns a "host:port" Adminer can use. TCP is preferred because PHP's
+// mysqli socket path often differs from the server's (e.g. DBngin uses
+// /tmp/mysql_3306.sock while PHP defaults to /tmp/mysql.sock).
+func detectMySQLServer() string {
+	out, err := store.RunOut("pgrep", "-f", "mysqld")
+	if err != nil {
+		return ""
+	}
+	pid := strings.TrimSpace(strings.SplitN(out, "\n", 2)[0])
+	if pid == "" {
+		return ""
+	}
+	cmdline, err := store.RunOut("ps", "-o", "command=", "-p", pid)
+	if err != nil {
+		return ""
+	}
+	port := "3306"
+	for _, arg := range strings.Fields(cmdline) {
+		if strings.HasPrefix(arg, "--port=") {
+			port = strings.TrimPrefix(arg, "--port=")
+		}
+	}
+	return "127.0.0.1:" + port
+}
+
+// adminerURL builds the Adminer URL. siteName prefills the database field
+// (Laravel convention: database name == site name); server prefills the
+// server field so the user does not have to fight socket paths.
+func adminerURL(sites *store.Sites, siteName, server string) string {
 	u := "http://" + store.SiteDomain(sites, "database") + "/"
+	var params []string
 	if siteName != "" {
-		u += "?db=" + siteName
+		params = append(params, "db="+siteName)
+	}
+	if server != "" {
+		params = append(params, "server="+url.QueryEscape(server), "username=root")
+	}
+	if len(params) > 0 {
+		u += "?" + strings.Join(params, "&")
 	}
 	return u
 }
@@ -219,5 +254,5 @@ func cmdDB(args []string) error {
 	if fs.NArg() > 0 {
 		siteName = fs.Arg(0)
 	}
-	return store.RunOutErr("open", adminerURL(sites, siteName))
+	return store.RunOutErr("open", adminerURL(sites, siteName, detectMySQLServer()))
 }
