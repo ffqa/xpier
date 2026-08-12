@@ -14,6 +14,9 @@ import (
 
 var (
 	safeExtRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	// safeSvcRe keeps manifest service names out of shell command injection
+	// (brew install <svc> is passed through sh -c).
+	safeSvcRe = regexp.MustCompile(`^[a-zA-Z0-9@._-]+$`)
 )
 
 type planItem struct {
@@ -112,6 +115,10 @@ func plan(m *store.Manifest) []planItem {
 			it.state = "missing"
 			it.detail = "not installed via brew"
 			it.command = "brew install " + svc
+			if !safeSvcRe.MatchString(svc) {
+				it.command = ""
+				it.detail = "invalid service name"
+			}
 		} else {
 			it.state = "ok"
 			it.detail = out

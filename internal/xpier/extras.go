@@ -12,46 +12,6 @@ import (
 	"xpier/internal/store"
 )
 
-// cmdLog tails a site's php-fpm log (Herd's `herd log` equivalent).
-func cmdLog(args []string) error {
-	fs := flag.NewFlagSet("log", flag.ExitOnError)
-	follow := fs.Bool("f", false, "follow the log")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	ver := ""
-	if fs.NArg() > 0 {
-		sites, err := store.LoadSites()
-		if err != nil {
-			return err
-		}
-		site, ok := sites.Sites[fs.Arg(0)]
-		if !ok {
-			return fmt.Errorf("site %s is not linked", fs.Arg(0))
-		}
-		ver = site.PHP
-		if ver == "" {
-			ver = nginx.DefaultPhpVersion()
-		}
-	}
-	logPath := filepath.Join(store.XpierHome(), "logs", "php-fpm-"+ver+".log")
-	if !store.FileExists(logPath) {
-		return fmt.Errorf("log %s not found (start the site with `xpier sites:up`)", logPath)
-	}
-	if *follow {
-		cmd := exec.Command("tail", "-f", logPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		return err
-	}
-	fmt.Print(string(data))
-	return nil
-}
-
 // --- Mailpit (mail capture) ---
 
 func mailpitBin() string {

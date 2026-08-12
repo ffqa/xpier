@@ -93,32 +93,6 @@ func TestCmdDirectoryListing(t *testing.T) {
 	}
 }
 
-func TestCmdLog(t *testing.T) {
-	homeTemp(t)
-	if err := cmdLog(nil); err == nil {
-		t.Error("cmdLog without log should error")
-	}
-	dir := t.TempDir()
-	old, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(old)
-	if err := cmdLog([]string{"nope"}); err == nil {
-		t.Error("cmdLog unknown site should error")
-	}
-	// Unknown site checked first; a real site with a log file prints it.
-	s := store.DefaultSites()
-	s.Sites["mysite"] = store.Site{Path: dir, Driver: "laravel", PHP: "8.2"}
-	s.Save()
-	if err := os.MkdirAll(filepath.Join(store.XpierHome(), "logs"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	logPath := filepath.Join(store.XpierHome(), "logs", "php-fpm-8.2.log")
-	os.WriteFile(logPath, []byte("hello log\n"), 0o644)
-	if err := cmdLog([]string{"mysite"}); err != nil {
-		t.Errorf("cmdLog = %v", err)
-	}
-}
-
 func TestCmdXdebug(t *testing.T) {
 	homeTemp(t)
 	if err := cmdXdebug([]string{"status"}); err != nil {

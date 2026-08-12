@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"xpier/internal/nginx"
 	"xpier/internal/service"
@@ -212,8 +213,13 @@ func cmdNode(args []string) error {
 	if ver == "" {
 		return fmt.Errorf("site has no node pin; run `xpier isolate-node <version>`")
 	}
-	// nvm is a shell function; run through a login shell.
-	script := fmt.Sprintf("source \"$NVM_DIR/nvm.sh\" 2>/dev/null || source \"$HOME/.nvm/nvm.sh\" 2>/dev/null; nvm exec %s node %s", ver, strings.Join(passthrough, " "))
+	// nvm is a shell function; run through a login shell. Quote every
+	// passthrough arg so spaces/quotes are not re-parsed by the shell.
+	quoted := make([]string, 0, len(passthrough))
+	for _, a := range passthrough {
+		quoted = append(quoted, strconv.Quote(a))
+	}
+	script := fmt.Sprintf("source \"$NVM_DIR/nvm.sh\" 2>/dev/null || source \"$HOME/.nvm/nvm.sh\" 2>/dev/null; nvm exec %s node %s", ver, strings.Join(quoted, " "))
 	cmd := exec.Command("bash", "-lc", script)
 	cmd.Dir = site.Path
 	cmd.Stdin = os.Stdin

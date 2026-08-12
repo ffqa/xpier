@@ -139,7 +139,7 @@ func cmdDBCreate(args []string) error {
 	return nil
 }
 
-// adminerSite registers a `database.test` site serving Adminer.
+// adminerSite registers a `database.<tld>` site serving Adminer.
 func ensureAdminerSite() error {
 	dir := filepath.Join(store.XpierHome(), "adminer")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -156,11 +156,12 @@ func ensureAdminerSite() error {
 	if err != nil {
 		return err
 	}
-	if _, ok := sites.Sites["database"]; !ok {
-		sites.Sites["database"] = store.Site{Path: dir, Driver: "php"}
-		if err := sites.Save(); err != nil {
-			return err
-		}
+	if existing, ok := sites.Sites["database"]; ok && existing.Path != dir {
+		return fmt.Errorf("a user site named `database` already exists at %s; xpier reserves the name for Adminer", existing.Path)
+	}
+	sites.Sites["database"] = store.Site{Path: dir, Driver: "php"}
+	if err := sites.Save(); err != nil {
+		return err
 	}
 	return nginx.WriteSiteNginxConfig(sites, "database")
 }
@@ -173,10 +174,10 @@ func cmdDB(args []string) error {
 	if err := ensureAdminerSite(); err != nil {
 		return err
 	}
-	siteName := "database"
-	if fs.NArg() > 0 {
-		siteName = fs.Arg(0) // open a specific site's db via adminer
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
 	}
-	_ = siteName
-	return store.RunOutErr("open", "http://database.test/")
+	domain := store.SiteDomain(sites, "database")
+	return store.RunOutErr("open", "http://"+domain+"/")
 }
