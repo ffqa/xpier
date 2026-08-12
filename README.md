@@ -66,7 +66,7 @@ xpier status
 ## 开发
 
 ```bash
-make version    # 版本号,由 git commit 数推导(0.0.00,逢 99 进位,每次 commit +1)
+make version    # 版本号,由 git commit 数推导(0.0.00,三个段位都逢 99 进位,每次 commit +1)
 make build      # 构建 ./xpier(自动注入版本)
 make install    # 构建并安装到 /usr/local/bin/xpier
 go test ./...   # 全量测试

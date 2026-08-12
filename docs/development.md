@@ -46,7 +46,8 @@ store ← nginx ← ca / apps / sites ← service ← share
 
 版本号 `X.Y.ZZ`(如 `0.0.09`)由 **git commit 数**推导,每次 commit 自动 +1:
 
-- patch = 提交数 % 100,零填充两位;逢 99 进位:`0.0.99 → 0.1.00`;minor 同样逢 99 进位:`0.99.99 → 1.0.00`
+- patch = 提交数 % 100,零填充两位
+- 三个段位都是 00-99,逢 99 逐级进位:`0.0.99 → 0.1.00 → ... → 0.99.99 → 1.0.00 → ... → 99.99.99`(99 万次提交后回绕到 0.0.00,纯理论)
 - `./scripts/version.sh` 打印当前版本;`make version` 同
 - 构建/安装统一走 `make build` / `make install`(自动带 `-ldflags "-X xpier/internal/xpier.Version=<版本>"`)
 - 手动构建不带 ldflags 时 `xpier --version` 显示 `dev`
