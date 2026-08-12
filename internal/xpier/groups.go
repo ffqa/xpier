@@ -8,7 +8,7 @@ import (
 	"xpier/internal/store"
 )
 
-var usagePadRe = regexp.MustCompile(` {3,}`)
+var usagePadRe = regexp.MustCompile(` {2,}`)
 
 // paintUsageLine colors an indented usage line: command in green, the
 // description after the column padding in gray.
