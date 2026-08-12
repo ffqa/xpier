@@ -317,3 +317,40 @@ func TestAppDownLiveButNotOurs(t *testing.T) {
 		t.Error("app state should be removed")
 	}
 }
+
+func TestWriteAppNginxConfPrefersStatePort(t *testing.T) {
+	homeTemp(t)
+	// Config says 5173, but a running app detected 5174 (vite re-bound).
+	app := store.App{Domain: "foo.test", Port: "5173"}
+	s := &store.AppState{Name: "web", PID: os.Getpid(), Port: "5174", Domain: "foo.test"}
+	if err := store.SaveAppState(s, "ns"); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAppNginxConf("ns", "web", app); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(appNginxConfPath("ns", "web"))
+	if !strings.Contains(string(data), "proxy_pass http://127.0.0.1:5174;") {
+		t.Errorf("state port not used:\n%s", data)
+	}
+}
+
+func TestProcGroupOf(t *testing.T) {
+	homeTemp(t)
+	if got := procGroupOf(os.Getpid()); got != os.Getpgrp() {
+		t.Errorf("procGroupOf = %d, want %d", got, os.Getpgrp())
+	}
+	if got := procGroupOf(999999); got != 0 {
+		t.Errorf("procGroupOf dead pid = %d, want 0", got)
+	}
+}
+
+func TestCmdLogsAllNoRunningApps(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeFile(t, filepath.Join(dir, "dev.yaml"), "apps:\n  web:\n    dir: /x\n    cmd: npm run dev\n")
+	if err := CmdLogsAll(nil); err == nil || !strings.Contains(err.Error(), "no apps running") {
+		t.Errorf("CmdLogsAll no running = %v", err)
+	}
+}

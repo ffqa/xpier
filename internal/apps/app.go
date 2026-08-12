@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"xpier/internal/nginx"
@@ -123,7 +124,7 @@ func appRunning(ns string, name string, app store.App) bool {
 	if err != nil {
 		return false
 	}
-	if store.PidAlive(s.PID) {
+	if store.ProcAlive(s.PID, s.Cmd) {
 		return true
 	}
 	return anyAppPortBusy(appPorts(app, s))
@@ -159,15 +160,41 @@ func killAppPids(pids []int) {
 	}
 }
 
-func killAppPortHolders(ports []string) {
+// portHolderPids returns the PIDs listening on the given TCP ports.
+func portHolderPids(ports []string) []int {
+	var pids []int
 	for _, p := range ports {
 		out, _ := exec.Command("lsof", "-ti", "tcp:"+p, "-sTCP:LISTEN").Output()
 		for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 			if pidStr := strings.TrimSpace(line); pidStr != "" {
 				if pid, err := strconv.Atoi(pidStr); err == nil {
-					syscall.Kill(pid, syscall.SIGKILL)
+					pids = append(pids, pid)
 				}
 			}
+		}
+	}
+	return pids
+}
+
+func procGroupOf(pid int) int {
+	out, err := store.RunOut("ps", "-o", "pgid=", "-p", strconv.Itoa(pid))
+	if err != nil {
+		return 0
+	}
+	pgid, _ := strconv.Atoi(strings.TrimSpace(out))
+	return pgid
+}
+
+// killAppPortHolders SIGKILLs port holders only when they belong to the app's
+// process group (pgid from Setpgid). A holder in another group is never ours
+// to kill, even if it occupies a configured port.
+func killAppPortHolders(ports []string, pgid int) {
+	if pgid <= 0 {
+		return
+	}
+	for _, pid := range portHolderPids(ports) {
+		if procGroupOf(pid) == pgid {
+			syscall.Kill(pid, syscall.SIGKILL)
 		}
 	}
 }
@@ -180,6 +207,15 @@ func writeAppNginxConf(ns, name string, app store.App) error {
 	port := app.Port
 	if port == "" && len(app.Ports) > 0 {
 		port = app.Ports[0]
+	}
+	// A running app may have detected a different actual port from its log
+	// (e.g. vite re-binds when 5173 is taken); proxy to what is really serving.
+	if st, err := store.LoadAppState(ns, name); err == nil {
+		if st.Port != "" {
+			port = st.Port
+		} else if len(st.Ports) > 0 {
+			port = st.Ports[0]
+		}
 	}
 	if app.Domain == "" || port == "" {
 		return nil
@@ -322,7 +358,7 @@ func appDown(ns string, name string, app store.App) {
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
-	killAppPortHolders(all)
+	killAppPortHolders(all, s.PID)
 	os.Remove(store.AppStatePath(ns, name))
 	removeAppNginxConf(ns, name)
 	fmt.Printf("  %s stopped\n", name)
@@ -522,10 +558,20 @@ func CmdDown(args []string) error {
 		}
 		cfgPorts := appPorts(app, &store.AppState{})
 		if anyAppPortBusy(cfgPorts) {
-			killAppPortHolders(cfgPorts)
-			removeAppNginxConf(ns, n)
-			fmt.Printf("  %s 端口被占但无状态（孤儿进程），已清理\n", n)
-			any = true
+			var ours []int
+			for _, pid := range portHolderPids(cfgPorts) {
+				if store.ProcAlive(pid, app.Cmd) {
+					ours = append(ours, pid)
+				}
+			}
+			if len(ours) > 0 {
+				killAppPids(ours)
+				removeAppNginxConf(ns, n)
+				fmt.Printf("  %s 端口被占且为游离进程（pid %v），已清理\n", n, ours)
+				any = true
+			} else {
+				fmt.Printf("  [warn] %s 端口 %s 被其它进程占用（非 xpier 启动），跳过\n", n, strings.Join(cfgPorts, ","))
+			}
 			continue
 		}
 		if pids := strayAppPids(app.Cmd); len(pids) > 0 {
@@ -707,6 +753,9 @@ func CmdStart(args []string) error {
 		return err
 	}
 	writeAppNginxConf(ns, name, app)
+	if err := nginx.NginxReload(); err != nil {
+		fmt.Printf("[warn] nginx reload failed: %v\n", err)
+	}
 	return nil
 }
 
@@ -731,6 +780,9 @@ func CmdRestart(args []string) error {
 		return err
 	}
 	writeAppNginxConf(ns, name, app)
+	if err := nginx.NginxReload(); err != nil {
+		fmt.Printf("[warn] nginx reload failed: %v\n", err)
+	}
 	return nil
 }
 
@@ -817,6 +869,8 @@ func CmdLogsAll(args []string) error {
 	}
 	fmt.Printf("tailing %d app(s) - Ctrl-C to stop\n", len(names))
 	lineCh := make(chan string, 64)
+	var wg sync.WaitGroup
+	started := 0
 	for i, n := range names {
 		s, err := store.LoadAppState(ns, n)
 		if err != nil {
@@ -831,8 +885,11 @@ func CmdLogsAll(args []string) error {
 		if err := cmd.Start(); err != nil {
 			continue
 		}
+		started++
 		defer cmd.Process.Kill()
+		wg.Add(1)
 		go func(name string, out io.Reader) {
+			defer wg.Done()
 			sc := bufio.NewScanner(out)
 			sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 			for sc.Scan() {
@@ -840,6 +897,13 @@ func CmdLogsAll(args []string) error {
 			}
 		}(n, stdout)
 	}
+	if started == 0 {
+		return fmt.Errorf("no app logs to tail")
+	}
+	go func() {
+		wg.Wait()
+		close(lineCh)
+	}()
 	for line := range lineCh {
 		fmt.Println(line)
 	}
