@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -170,10 +171,22 @@ func TestVerifyPublicURL(t *testing.T) {
 
 func TestCmdShareAlreadySharing(t *testing.T) {
 	homeTemp(t)
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available for marker test")
+	}
 	s := store.DefaultSites()
 	s.Sites["abc"] = store.Site{Path: "/srv/abc", Driver: "laravel"}
 	s.Save()
-	st := &ShareState{Site: "abc", PID: os.Getpid(), URL: "https://abc.trycloudflare.com", Target: "http://abc.test"}
+	// A child whose cmdline contains the tunnel marker counts as sharing.
+	child := exec.Command("python3", "-c", "import time;time.sleep(300)", "--url", "http://abc.test")
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		child.Process.Kill()
+		child.Wait()
+	}()
+	st := &ShareState{Site: "abc", PID: child.Process.Pid, URL: "https://abc.trycloudflare.com", Target: "http://abc.test"}
 	SaveShareState(st)
 	if err := CmdShare([]string{"abc"}); err != nil {
 		t.Errorf("CmdShare already sharing = %v", err)

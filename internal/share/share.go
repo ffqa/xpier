@@ -218,7 +218,7 @@ func CmdShare(args []string) error {
 	if key == "" {
 		key = "default"
 	}
-	if st, err := LoadShareState(key); err == nil && store.PidAlive(st.PID) {
+	if st, err := LoadShareState(key); err == nil && store.ProcAlive(st.PID, "--url "+st.Target) {
 		fmt.Printf("already sharing: %s (pid %d)\n", st.URL, st.PID)
 		return nil
 	}
@@ -300,18 +300,7 @@ func CmdShareStop(args []string) error {
 		return fmt.Errorf("no shares to stop")
 	}
 	for _, site := range keys {
-		st, err := LoadShareState(site)
-		if err != nil {
-			continue
-		}
-		if store.ProcAlive(st.PID, "--url "+st.Target) {
-			store.KillGroup(st.PID, syscall.SIGTERM)
-			time.Sleep(300 * time.Millisecond)
-			if store.PidAlive(st.PID) {
-				store.KillGroup(st.PID, syscall.SIGKILL)
-			}
-		}
-		os.Remove(ShareStatePath(site))
+		stopShareByKey(site)
 		// Remove the tunnel host from the site's nginx config.
 		if s, err := store.LoadSites(); err == nil {
 			if _, ok := s.Sites[site]; ok {

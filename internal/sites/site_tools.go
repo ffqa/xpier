@@ -327,6 +327,11 @@ func CmdTLD(args []string) error {
 		if err := store.WriteDnsmasqConfig(tld); err != nil {
 			return err
 		}
+		// dnsmasq only reads its config at startup; kickstart applies the new
+		// wildcard immediately (requires sudoers launchctl or sudo).
+		if _, err := store.RunOut("sudo", "-n", "launchctl", "kickstart", "-k", "system/com.xpier.dnsmasq"); err != nil {
+			fmt.Println("[warn] dnsmasq not restarted (needs sudo): run `sudo xpier service dnsmasq restart` to apply DNS")
+		}
 		if err := service.EnsureWildcardCert(tld); err != nil {
 			return err
 		}

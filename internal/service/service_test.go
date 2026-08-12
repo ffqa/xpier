@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -71,8 +72,34 @@ func TestFpmStateRoundTripAndRunning(t *testing.T) {
 	if got.PID != os.Getpid() || got.Sock != "/tmp/x.sock" {
 		t.Errorf("round trip = %+v", got)
 	}
+	// The test process is alive but its cmdline lacks the fpm marker: the
+	// guard must NOT report it as a running php-fpm (recycled-PID protection).
+	if FpmRunning(ver) {
+		t.Error("FpmRunning should reject a live pid without the fpm marker")
+	}
+	// A real child whose cmdline contains the marker is recognized.
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not available for marker test")
+	}
+	marker := "-y " + FpmConfPath(ver)
+	child := exec.Command("python3", "-c", "import time;time.sleep(300)", marker)
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		child.Process.Kill()
+		child.Wait()
+	}()
+	st.PID = child.Process.Pid
+	data, err = json.Marshal(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(FpmStatePath(ver), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if !FpmRunning(ver) {
-		t.Error("FpmRunning should be true for live pid")
+		t.Error("FpmRunning should be true for a live pid with the fpm marker")
 	}
 	// Dead pid -> false.
 	st.PID = 999999

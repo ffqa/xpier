@@ -47,10 +47,13 @@ func LoadFpmState(ver string) (*FpmState, error) {
 }
 
 func FpmRunning(ver string) bool {
-	if st, err := LoadFpmState(ver); err == nil {
-		return store.PidAlive(st.PID)
+	st, err := LoadFpmState(ver)
+	if err != nil {
+		return false
 	}
-	return false
+	// A recycled PID must not look like a running php-fpm, or FpmUp would
+	// skip starting and leave the site on a dead socket.
+	return store.ProcAlive(st.PID, "-y "+FpmConfPath(ver))
 }
 
 func WriteFpmConf(ver string) error {
