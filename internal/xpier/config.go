@@ -1,7 +1,6 @@
 package xpier
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,23 +46,49 @@ func buildManifestContent(php, runtime string) string {
 	return content
 }
 
+// parseInitArgs parses init flags position-independently (Go's flag package
+// stops at the first positional arg, so `xpier init . --force` would silently
+// drop --force).
+func parseInitArgs(args []string) (php, runtime string, local, force bool, err error) {
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "-h" || a == "--help":
+			fmt.Println("usage: xpier init [--php 8.2] [--runtime fpm|hyperf|swoole|frankenphp] [--local] [--force] [.]")
+			return "", "", false, false, nil
+		case a == "--php" && i+1 < len(args):
+			php = args[i+1]
+			i++
+		case strings.HasPrefix(a, "--php="):
+			php = strings.TrimPrefix(a, "--php=")
+		case a == "--runtime" && i+1 < len(args):
+			runtime = args[i+1]
+			i++
+		case strings.HasPrefix(a, "--runtime="):
+			runtime = strings.TrimPrefix(a, "--runtime=")
+		case a == "--local":
+			local = true
+		case a == "--force":
+			force = true
+		case a == ".":
+			local = true
+		default:
+			return "", "", false, false, fmt.Errorf("unexpected argument %q", a)
+		}
+	}
+	return php, runtime, local, force, nil
+}
+
 func cmdInit(args []string) error {
-	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	php := fs.String("php", "", "pin PHP version, e.g. 8.2")
-	runtime := fs.String("runtime", "", "runtime (fpm | hyperf | swoole | frankenphp)")
-	local := fs.Bool("local", false, "write xpier.yaml into the current directory instead of ~/.xpier (commit it to git if you want it versioned)")
-	force := fs.Bool("force", false, "overwrite an existing manifest with the template")
-	if err := fs.Parse(args); err != nil {
+	php, runtime, local, force, err := parseInitArgs(args)
+	if err != nil {
 		return err
 	}
-	if fs.NArg() > 0 && fs.Arg(0) == "." {
-		*local = true
-	}
-	if *runtime != "" {
-		switch *runtime {
+	if runtime != "" {
+		switch runtime {
 		case "fpm", "hyperf", "swoole", "frankenphp":
 		default:
-			return fmt.Errorf("invalid runtime %q (fpm | hyperf | swoole | frankenphp)", *runtime)
+			return fmt.Errorf("invalid runtime %q (fpm | hyperf | swoole | frankenphp)", runtime)
 		}
 	}
 	cwd, err := os.Getwd()
@@ -71,7 +96,7 @@ func cmdInit(args []string) error {
 		return err
 	}
 	var manifestPath string
-	if *local {
+	if local {
 		manifestPath = filepath.Join(cwd, store.ManifestName)
 	} else {
 		manifestPath, _ = store.ProjectPaths(cwd)
@@ -79,14 +104,14 @@ func cmdInit(args []string) error {
 			return err
 		}
 	}
-	if _, err := os.Stat(manifestPath); err == nil && !*force {
+	if _, err := os.Stat(manifestPath); err == nil && !force {
 		return fmt.Errorf("%s already exists (use --force to overwrite with the template)", manifestPath)
 	}
-	rt := "fpm"
-	if *runtime != "" {
-		rt = *runtime
+	rt := runtime
+	if rt == "" {
+		rt = "fpm"
 	}
-	if err := os.WriteFile(manifestPath, []byte(buildManifestContent(*php, rt)), 0o644); err != nil {
+	if err := os.WriteFile(manifestPath, []byte(buildManifestContent(php, rt)), 0o644); err != nil {
 		return err
 	}
 	fmt.Printf("created %s (fully annotated template; unused fields stay commented)\n", manifestPath)
