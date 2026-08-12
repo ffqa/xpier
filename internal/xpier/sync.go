@@ -60,6 +60,13 @@ func cmdSync(args []string) error {
 		fmt.Printf("dry-run: %d item(s) pending; re-run with --apply to install and write %s\n", pending, lockPath)
 		return nil
 	}
+	// --apply means "go install": trust the standard PHP taps up front
+	// (Homebrew refuses untrusted tap formulae otherwise).
+	for _, tap := range []string{"shivammathur/php", "shivammathur/extensions"} {
+		if err := store.BrewTrustTap(tap); err != nil {
+			fmt.Printf("[warn] brew trust %s: %v\n", tap, err)
+		}
+	}
 	if err := applyPlan(items); err != nil {
 		return err
 	}
