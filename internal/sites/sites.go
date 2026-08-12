@@ -31,17 +31,6 @@ func DetectDriver(dir string) string {
 	return "static"
 }
 
-// siteRoot returns the nginx document root for a site.
-func siteRoot(site store.Site) string {
-	switch site.Driver {
-	case "laravel":
-		return filepath.Join(site.Path, "public")
-	case "spa":
-		return filepath.Join(site.Path, "dist")
-	}
-	return site.Path
-}
-
 // CmdPark registers directories whose subdirectories become sites.
 func CmdPark(args []string) error {
 	fs := flag.NewFlagSet("park", flag.ExitOnError)

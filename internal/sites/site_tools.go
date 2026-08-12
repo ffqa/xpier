@@ -302,7 +302,7 @@ func CmdSiteInformation(args []string) error {
 	fmt.Printf("path:    %s\n", site.Path)
 	fmt.Printf("driver:  %s\n", site.Driver)
 	fmt.Printf("php:     %s\n", php)
-	fmt.Printf("root:    %s\n", siteRoot(site))
+	fmt.Printf("root:    %s\n", store.SiteRoot(site))
 	return nil
 }
 

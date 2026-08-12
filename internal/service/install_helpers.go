@@ -61,7 +61,7 @@ func LaunchdPlist(label string, args ...string) string {
   <key>KeepAlive</key>
   <true/>
   <key>ProcessType</key>
-  <string>Interactive</string>
+  <string>Background</string>
   <key>StandardOutPath</key>
   <string>%s</string>
   <key>StandardErrorPath</key>
