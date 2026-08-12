@@ -73,7 +73,7 @@ var namespaceGroups = map[string][]string{
 		"ini [--php 8.2]             open a PHP version's php.ini",
 	},
 	"env": {
-		"init [--php 8.2] [...]      pin versions in ~/.xpier/projects (or '.' in repo)",
+		"init [--php 8.2] [.]         pin versions in ~/.xpier/projects",
 		"init:fresh                  reset project pins",
 		"sync [--apply]              resolve pins; --apply runs brew + writes xpier.lock",
 		"doctor                      check environment + composer check-platform-reqs",
