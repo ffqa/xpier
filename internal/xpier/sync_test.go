@@ -136,3 +136,48 @@ func TestSafeExtRe(t *testing.T) {
 		}
 	}
 }
+
+func TestInitManifestTemplateComplete(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	old, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(old)
+	if err := cmdInit(nil); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	mp, _ := store.ProjectPaths(cwd)
+	data, err := os.ReadFile(mp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(data)
+	for _, want := range []string{"runtime: fpm", "# php:", "# extensions:", "# services:", "# apps:", "swoole", "xdebug", "node:"} {
+		if !strings.Contains(content, want) {
+			t.Errorf("template missing %q:\n%s", want, content)
+		}
+	}
+	// Still a valid manifest.
+	m, err := store.LoadManifest(mp)
+	if err != nil || m.Runtime != "fpm" {
+		t.Errorf("template not parseable: %+v %v", m, err)
+	}
+}
+
+func TestInitManifestTemplatePinsPHP(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	old, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(old)
+	if err := cmdInit([]string{"--php", "8.4"}); err != nil {
+		t.Fatal(err)
+	}
+	cwd, _ := os.Getwd()
+	mp, _ := store.ProjectPaths(cwd)
+	data, _ := os.ReadFile(mp)
+	if !strings.Contains(string(data), `php: "8.4"`) {
+		t.Errorf("pinned php missing:\n%s", data)
+	}
+}
