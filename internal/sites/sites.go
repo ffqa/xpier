@@ -148,7 +148,20 @@ func CmdLink(args []string) error {
 	if err := nginx.NginxReload(); err != nil {
 		fmt.Printf("[warn] nginx reload failed: %v (run `sudo xpier install` first?)\n", err)
 	}
+	// Standard Laravel/PHP sites need no dev server: nginx + php-fpm serve
+	// public/ directly. Start the site's php-fpm right away in interactive
+	// sessions (skipped under pipes/tests).
+	php := site.PHP
+	if php == "" {
+		php = nginx.DefaultPhpVersion()
+	}
+	if store.IsTTY(os.Stdout) {
+		if err := service.FpmUp(php); err != nil {
+			fmt.Printf("[warn] php-fpm %s: %v (run `xpier sites:up` later)\n", php, err)
+		}
+	}
 	fmt.Printf("linked %s -> %s (driver %s, php %s)\n", store.SiteDomain(sites, siteName), cwd, site.Driver, site.PHP)
+	fmt.Printf("open http://%s/ now\n", store.SiteDomain(sites, siteName))
 	return nil
 }
 

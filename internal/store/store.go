@@ -517,6 +517,12 @@ func paintWord(s string) string {
 	return s
 }
 
+// IsTTY reports whether f is an interactive terminal (not a pipe).
+func IsTTY(f *os.File) bool {
+	fi, err := f.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
 // colorEnabled reports whether ANSI color output is appropriate: NO_COLOR is
 // unset and stdout is a terminal (not a pipe).
 func colorEnabled() bool {
