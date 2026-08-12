@@ -435,10 +435,43 @@ address=/.%s/127.0.0.1
 	return os.WriteFile(DnsmasqConfPath(), []byte(conf), 0o644)
 }
 
+// paintWord maps a status word to its ANSI color: up=green, down=red,
+// none/no=*yellow. Plain strings pass through untouched.
+func paintWord(s string) string {
+	switch {
+	case s == "up" || strings.HasPrefix(s, "up"):
+		return "\x1b[32m" + s + "\x1b[0m"
+	case s == "down":
+		return "\x1b[31m" + s + "\x1b[0m"
+	case s == "none" || strings.HasPrefix(s, "no "):
+		return "\x1b[33m" + s + "\x1b[0m"
+	}
+	return s
+}
+
+// colorEnabled reports whether ANSI color output is appropriate: NO_COLOR is
+// unset and stdout is a terminal (not a pipe).
+func colorEnabled() bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+	fi, err := os.Stdout.Stat()
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+}
+
+// Paint colors the status words used across xpier output. Returns s unchanged
+// when colors are disabled (piped output, NO_COLOR).
+func Paint(s string) string {
+	if !colorEnabled() {
+		return s
+	}
+	return paintWord(s)
+}
+
 // UpDown formats a boolean as the up/down string used by status tables.
 func UpDown(up bool) string {
 	if up {
-		return "up"
+		return Paint("up")
 	}
-	return "down"
+	return Paint("down")
 }

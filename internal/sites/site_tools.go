@@ -133,7 +133,7 @@ func CmdIsolated(args []string) error {
 	}
 	sort.Strings(names)
 	if len(names) == 0 {
-		fmt.Println("no isolated sites")
+		fmt.Println(store.Paint("no isolated sites"))
 		return nil
 	}
 	for _, name := range names {

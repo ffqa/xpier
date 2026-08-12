@@ -59,7 +59,7 @@ func CmdSitesDown(args []string) error {
 		}
 	}
 	if stopped == 0 {
-		fmt.Println("no php-fpm running")
+		fmt.Println(store.Paint("no php-fpm running"))
 	}
 	return nil
 }

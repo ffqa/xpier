@@ -36,9 +36,9 @@ func XpierServiceStatus() {
 		}
 	}
 	if len(fpm) == 0 {
-		fmt.Println("php-fpm: down")
+		fmt.Println("php-fpm: " + store.Paint("down"))
 	} else {
-		fmt.Printf("php-fpm: up (%s)\n", strings.Join(fpm, ", "))
+		fmt.Printf("php-fpm: %s (%s)\n", store.Paint("up"), strings.Join(fpm, ", "))
 	}
 	// Shares (cloudflared tunnels)
 	entries, _ = os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
@@ -52,9 +52,9 @@ func XpierServiceStatus() {
 		}
 	}
 	if len(shares) == 0 {
-		fmt.Println("share:   none (cloudflared)")
+		fmt.Println("share:   " + store.Paint("none") + " (cloudflared)")
 	} else {
-		fmt.Printf("share:   up: %s\n", strings.Join(shares, ", "))
+		fmt.Printf("share:   %s: %s\n", store.Paint("up"), strings.Join(shares, ", "))
 	}
 }
 

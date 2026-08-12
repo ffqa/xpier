@@ -88,7 +88,7 @@ func cmdProxies(args []string) error {
 		return err
 	}
 	if len(proxies) == 0 {
-		fmt.Println("no proxies")
+		fmt.Println(store.Paint("no proxies"))
 		return nil
 	}
 	keys := make([]string, 0, len(proxies))

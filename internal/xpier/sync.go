@@ -51,7 +51,7 @@ func cmdSync(args []string) error {
 		}
 	}
 	if pending == 0 {
-		fmt.Println("nothing to do")
+		fmt.Println(store.Paint("nothing to do"))
 		return writeLock(m, lockPath)
 	}
 	if !*apply {

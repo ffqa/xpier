@@ -634,14 +634,7 @@ func CmdStatus(args []string) error {
 		for i, c := range cells {
 			val := c
 			if i == 1 && c != "state" {
-				switch {
-				case strings.HasPrefix(c, "up"):
-					val = "\x1b[32m" + c + "\x1b[0m"
-				case strings.HasPrefix(c, "down"):
-					val = "\x1b[31m" + c + "\x1b[0m"
-				default:
-					val = "\x1b[33m" + c + "\x1b[0m"
-				}
+				val = store.Paint(c)
 			}
 			line += val + strings.Repeat(" ", widths[i]-len(c)+2)
 		}

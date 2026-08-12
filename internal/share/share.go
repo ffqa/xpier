@@ -258,7 +258,7 @@ func CmdShare(args []string) error {
 func CmdShares(args []string) error {
 	entries, err := os.ReadDir(filepath.Join(store.XpierHome(), "servers"))
 	if err != nil {
-		fmt.Println("no shares")
+		fmt.Println(store.Paint("no shares"))
 		return nil
 	}
 	found := false
@@ -272,14 +272,14 @@ func CmdShares(args []string) error {
 			continue
 		}
 		found = true
-		state := "down"
+		state := store.Paint("down")
 		if store.PidAlive(st.PID) {
-			state = "up"
+			state = store.Paint("up")
 		}
 		fmt.Printf("  %-12s %-6s %s (pid %d, %s)\n", site, state, st.URL, st.PID, st.Target)
 	}
 	if !found {
-		fmt.Println("no shares")
+		fmt.Println(store.Paint("no shares"))
 	}
 	return nil
 }

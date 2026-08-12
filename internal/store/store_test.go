@@ -390,3 +390,27 @@ func TestEnsureBrewPackageMissingDeclined(t *testing.T) {
 		t.Errorf("EnsureBrewPackage declined = %v", err)
 	}
 }
+
+func TestPaintWord(t *testing.T) {
+	green, red, yellow := "\x1b[32m", "\x1b[31m", "\x1b[33m"
+	reset := "\x1b[0m"
+	cases := []struct{ in, want string }{
+		{"up", green + "up" + reset},
+		{"up*", green + "up*" + reset},
+		{"down", red + "down" + reset},
+		{"none", yellow + "none" + reset},
+		{"no shares", yellow + "no shares" + reset},
+		{"no isolated sites", yellow + "no isolated sites" + reset},
+		{"xdebug", "xdebug"},
+	}
+	for _, c := range cases {
+		if got := paintWord(c.in); got != c.want {
+			t.Errorf("paintWord(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+	// Paint respects NO_COLOR even on a terminal.
+	t.Setenv("NO_COLOR", "1")
+	if got := Paint("up"); got != "up" {
+		t.Errorf("Paint with NO_COLOR = %q, want plain", got)
+	}
+}
