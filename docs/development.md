@@ -42,19 +42,26 @@ store ← nginx ← ca / apps / sites ← service ← share
 3. 写测试(临时 HOME 隔离),`go test ./...`。
 4. 更新 `docs/commands.md`。
 
+## 版本规则
+
+版本号 `X.Y.ZZ`(如 `0.0.09`)由 **git commit 数**推导,每次 commit 自动 +1:
+
+- patch = 提交数 % 100,零填充两位;逢 99 进位:`0.0.99 → 0.1.00`;minor 同样逢 99 进位:`0.99.99 → 1.0.00`
+- `./scripts/version.sh` 打印当前版本;`make version` 同
+- 构建/安装统一走 `make build` / `make install`(自动带 `-ldflags "-X xpier/internal/xpier.Version=<版本>"`)
+- 手动构建不带 ldflags 时 `xpier --version` 显示 `dev`
+
 ## 发布
 
 ```bash
-VERSION=v0.1.0
-LDFLAGS="-X xpier/internal/xpier.Version=$VERSION"
+make install              # 以当前 commit 数构建并安装到 /usr/local/bin/xpier
+VERSION=$(make version)   # 例如 0.0.10
 
 # 通用二进制(Intel + Apple Silicon)
-GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o dist/xpier-darwin-amd64 .
-GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o dist/xpier-darwin-arm64 .
+GOOS=darwin GOARCH=amd64 go build -ldflags "-X xpier/internal/xpier.Version=$VERSION" -o dist/xpier-darwin-amd64 .
+GOOS=darwin GOARCH=arm64 go build -ldflags "-X xpier/internal/xpier.Version=$VERSION" -o dist/xpier-darwin-arm64 .
 lipo -create -output dist/xpier dist/xpier-darwin-amd64 dist/xpier-darwin-arm64
 ```
-
-不带 ldflags 时 `xpier --version` 显示 `dev`。
 
 发布包包含:README.md、LICENSE、docs/。安装脚本建议:
 
