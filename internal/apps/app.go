@@ -201,7 +201,7 @@ func writeAppNginxConf(ns, name string, app store.App) error {
         proxy_set_header Connection "upgrade";
     }
 }
-`, app.Domain, cert, certKey, app.Port)
+`, app.Domain, cert, certKey, port)
 	if err := os.MkdirAll(filepath.Dir(appNginxConfPath(ns, name)), 0o755); err != nil {
 		return err
 	}

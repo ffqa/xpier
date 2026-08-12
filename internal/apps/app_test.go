@@ -274,3 +274,29 @@ func TestCmdUpDownNoConfig(t *testing.T) {
 		t.Error("CmdLogsAll without config should error")
 	}
 }
+
+func TestWriteAppNginxConfPorts(t *testing.T) {
+	homeTemp(t)
+	app := store.App{Domain: "foo.test", Ports: []string{"8080"}}
+	if err := writeAppNginxConf("ns", "web", app); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(appNginxConfPath("ns", "web"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conf := string(data)
+	if !strings.Contains(conf, "proxy_pass http://127.0.0.1:8080;") {
+		t.Errorf("ports[0] not used:\n%s", conf)
+	}
+	if !strings.Contains(conf, "server_name foo.test;") {
+		t.Errorf("domain missing:\n%s", conf)
+	}
+	// No domain -> no config written.
+	if err := writeAppNginxConf("ns", "x", store.App{Port: "9000"}); err != nil {
+		t.Fatal(err)
+	}
+	if store.FileExists(appNginxConfPath("ns", "x")) {
+		t.Error("config without domain should not be written")
+	}
+}
