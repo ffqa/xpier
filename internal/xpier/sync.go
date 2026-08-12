@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -134,11 +133,9 @@ func applyPlan(items []planItem) error {
 			continue
 		}
 		fmt.Println("-> " + it.command)
-		out, err := exec.Command("sh", "-c", it.command).CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("%s failed: %v\n%s", it.command, err, out)
+		if err := store.RunOutLive("sh", "-c", it.command); err != nil {
+			return fmt.Errorf("%s failed: %w", it.command, err)
 		}
-		fmt.Println(string(out))
 	}
 	return nil
 }

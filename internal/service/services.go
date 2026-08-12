@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -334,13 +333,13 @@ func CmdServicesCreate(args []string) error {
 	if out, err := BrewAsUser("list", "--versions", formula); err == nil && strings.Contains(out, formula) {
 		fmt.Printf("%s already installed\n", formula)
 	} else {
-		fmt.Printf("installing %s via brew...\n", formula)
-		if out, err := BrewAsUser("install", formula); err != nil {
-			return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
+		fmt.Printf("installing %s via brew (progress below)...\n", formula)
+		if err := store.RunOutLive("brew", "install", formula); err != nil {
+			return fmt.Errorf("brew install %s failed: %w (run it manually to see the full log)", formula, err)
 		}
 	}
-	if out, err := BrewAsUser("services", "start", formula); err != nil {
-		return fmt.Errorf("brew services start %s: %v: %s", formula, err, out)
+	if err := store.RunOutLive("brew", "services", "start", formula); err != nil {
+		return fmt.Errorf("brew services start %s: %w", formula, err)
 	}
 	fmt.Printf("%s installed and started\n", formula)
 	return nil
@@ -359,9 +358,9 @@ func CmdPhpInstall(args []string) error {
 	if !store.SafePhpRe.MatchString(ver) {
 		return fmt.Errorf("invalid php version %q", ver)
 	}
-	out, err := exec.Command("brew", "install", "shivammathur/php/php@"+ver).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("brew install php@%s: %v: %s", ver, err, out)
+	fmt.Printf("installing php@%s via brew (progress below)...\n", ver)
+	if err := store.RunOutLive("brew", "install", "shivammathur/php/php@"+ver); err != nil {
+		return fmt.Errorf("brew install php@%s failed: %w (run it manually to see the full log)", ver, err)
 	}
 	fmt.Printf("php@%s installed\n", ver)
 	return nil
@@ -381,9 +380,9 @@ func CmdPhpUpdate(args []string) error {
 	if !store.SafePhpRe.MatchString(ver) {
 		return fmt.Errorf("invalid php version %q", ver)
 	}
-	out, err := exec.Command("brew", "upgrade", "shivammathur/php/php@"+ver).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("brew upgrade php@%s: %v: %s", ver, err, out)
+	fmt.Printf("upgrading php@%s via brew (progress below)...\n", ver)
+	if err := store.RunOutLive("brew", "upgrade", "shivammathur/php/php@"+ver); err != nil {
+		return fmt.Errorf("brew upgrade php@%s failed: %w (run it manually to see the full log)", ver, err)
 	}
 	fmt.Printf("php@%s upgraded\n", ver)
 	return nil

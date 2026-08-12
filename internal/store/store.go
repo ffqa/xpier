@@ -419,6 +419,16 @@ var SafeSiteNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 var SafePhpRe = regexp.MustCompile(`^\d+\.\d+$`)
 
+// RunOutLive runs a command with stdin/stdout/stderr attached so long
+// installs (brew) show their progress instead of buffering it.
+func RunOutLive(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 func RunOutErr(name string, args ...string) error {
 	_, err := RunOut(name, args...)
 	return err
