@@ -253,8 +253,12 @@ func CmdSites(args []string) error {
 			php = nginx.DefaultPhpVersion()
 		}
 		up := service.FpmRunning(php)
-		fmt.Printf("  %-30s driver=%-7s php=%-4s fpm=%s path=%s\n",
-			store.SiteDomain(sites, name), site.Driver, php, store.UpDown(up), site.Path)
+		proto := "https"
+		if site.Secure != nil && !*site.Secure {
+			proto = "http"
+		}
+		fmt.Printf("  %-30s driver=%-7s php=%-4s fpm=%s %s path=%s\n",
+			store.SiteDomain(sites, name), site.Driver, php, store.UpDown(up), proto, site.Path)
 	}
 	return nil
 }

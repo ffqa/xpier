@@ -252,12 +252,37 @@ func cmdCompletion(args []string) error {
 	if len(args) > 0 {
 		shell = args[0]
 	}
-	cmds := []string{"init sync doctor status app app:init up app:up down app:down start app:start restart app:restart log app:log logs app:logs url app:url install refresh link unlink park forget paths sites sites:up sites:down site:php use php:list php:install php:update which which-php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure unsecure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop fetch-share-url mail:up mail:down mail xdebug tinker directory-listing isolate-node unisolate-node isolated-node node completion services services:stop services:start service ini"}
+	cmds := []string{"init init:fresh laravel:update sync doctor status app app:init up app:up down app:down start app:start restart app:restart log app:log logs app:logs url app:url install refresh link unlink park forget paths sites sites:up sites:down site:php use php:list php:install php:update which which-php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure unsecure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop fetch-share-url mail:up mail:down mail xdebug debug:start debug:stop tinker directory-listing isolate-node unisolate-node isolated-node node completion services services:stop services:start services:available services:versions services:create service ini"}
 	switch shell {
 	case "zsh":
 		fmt.Printf("#compdef xpier\n_xpier() { compadd %s }\ncompdef _xpier xpier\n", cmds)
 	default:
 		fmt.Printf("_xpier() { local cur=${COMP_WORDS[COMP_CWORD]}; COMPREPLY=( $(compgen -W \"%s\" -- $cur) ); }\ncomplete -F _xpier xpier\n", cmds)
+	}
+	return nil
+}
+
+// cmdLaravelUpdate upgrades laravel/framework in the current site via
+// composer (Herd's laravel:update).
+func cmdLaravelUpdate(args []string) error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	_, site, err := sitepkg.ResolveSite(sites, "")
+	if err != nil {
+		return err
+	}
+	if !store.FileExists(filepath.Join(site.Path, "composer.json")) {
+		return fmt.Errorf("no composer.json in %s", site.Path)
+	}
+	cmd := exec.Command("composer", "update", "laravel/framework", "--with-all-dependencies")
+	cmd.Dir = site.Path
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("composer update: %w", err)
 	}
 	return nil
 }

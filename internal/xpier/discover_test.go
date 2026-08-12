@@ -171,3 +171,23 @@ func TestNamespaceGroupApp(t *testing.T) {
 		t.Error("Run(app bogus) should error")
 	}
 }
+
+func TestNewCommandsDispatch(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	old, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(old)
+	// Safe, read-only or temp-scoped commands must dispatch without error.
+	for _, cmd := range []string{"services:available", "services:versions", "init:fresh", "paths", "which", "which-php", "php:list"} {
+		if err := Run(strings.Split(cmd, " ")); err != nil {
+			t.Errorf("Run(%q) = %v", cmd, err)
+		}
+	}
+	// init:fresh recreates the manifest in the temp project dir.
+	cwd, _ := os.Getwd()
+	mp, _ := store.ProjectPaths(cwd)
+	if !store.FileExists(mp) {
+		t.Error("init:fresh should recreate the manifest")
+	}
+}

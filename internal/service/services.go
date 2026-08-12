@@ -276,6 +276,68 @@ func startSiteFpms() error {
 	return nil
 }
 
+var knownServices = []string{"mysql", "mariadb", "redis", "postgresql@14", "postgresql@16", "mailpit", "cloudflared"}
+
+// CmdServicesAvailable lists the services xpier can install via brew and
+// whether each is already installed (Herd Pro's services:available).
+func CmdServicesAvailable(args []string) error {
+	fmt.Println("available services (brew):")
+	for _, svc := range knownServices {
+		status := "-"
+		if out, err := store.RunOut("brew", "list", "--versions", svc); err == nil && out != "" {
+			status = out
+		}
+		fmt.Printf("  %-16s %s\n", svc, status)
+	}
+	return nil
+}
+
+// CmdServicesVersions lists installed versions of known services.
+func CmdServicesVersions(args []string) error {
+	found := false
+	for _, svc := range knownServices {
+		if out, err := store.RunOut("brew", "list", "--versions", svc); err == nil && out != "" {
+			fmt.Printf("  %-16s %s\n", svc, out)
+			found = true
+		}
+	}
+	if !found {
+		fmt.Println("no known services installed")
+	}
+	return nil
+}
+
+// CmdServicesCreate installs a service via brew and starts it
+// (lightweight stand-in for Herd Pro's managed database services).
+func CmdServicesCreate(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: xpier services:create <mysql|mariadb|redis|postgres>")
+	}
+	aliases := map[string]string{
+		"mysql": "mysql", "mariadb": "mariadb", "maria": "mariadb",
+		"redis": "redis", "postgres": "postgresql@16", "postgresql": "postgresql@16",
+		"postgresql@16": "postgresql@16", "postgresql@14": "postgresql@14",
+		"mailpit": "mailpit",
+	}
+	formula, ok := aliases[args[0]]
+	if !ok {
+		return fmt.Errorf("unknown service %q (mysql|mariadb|redis|postgres|mailpit)", args[0])
+	}
+	if out, err := BrewAsUser("list", "--versions", formula); err == nil && strings.Contains(out, formula) {
+		fmt.Printf("%s already installed\n", formula)
+	} else {
+		fmt.Printf("installing %s via brew...\n", formula)
+		if out, err := BrewAsUser("install", formula); err != nil {
+			return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
+		}
+	}
+	if out, err := BrewAsUser("services", "start", formula); err != nil {
+		return fmt.Errorf("brew services start %s: %v: %s", formula, err, out)
+	}
+	fmt.Printf("%s installed and started\n", formula)
+	return nil
+}
+
 // CmdPhpInstall installs a PHP version via brew (shivammathur tap).
 func CmdPhpInstall(args []string) error {
 	if len(args) < 1 {

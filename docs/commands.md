@@ -72,6 +72,8 @@
 | 命令 | 说明 |
 |---|---|
 | `xpier init [--php 8.2] [--runtime fpm|hyperf|swoole|frankenphp] [.]` | 生成 `~/.xpier/projects/<slug>/xpier.yaml`;`.` 写入仓库内 |
+| `xpier init:fresh` | 丢弃现有钉定,重建默认 manifest |
+| `xpier laravel:update` | 站点内 `composer update laravel/framework --with-all-dependencies` |
 | `xpier sync [--apply]` | 解析钉定(php/扩展/服务);`--apply` 实际执行 brew 并写 `xpier.lock` |
 | `xpier doctor` | 体检:PHP 版本、扩展、composer check-platform-reqs |
 | `xpier ini [--php 8.2]` | 打开指定版本的 php.ini |
@@ -82,6 +84,8 @@
 | 命令 | 说明 |
 |---|---|
 | `xpier db:install <svc>` | brew 安装 mysql/mariadb/redis/postgres 并启动 |
+| `xpier services:available` / `services:versions` | 可安装服务清单 / 已装版本 |
+| `xpier services:create <svc>` | 安装并启动一个服务(Herd Pro 轻量替代) |
 | `xpier db:start <svc>` / `db:stop <svc>` | brew services 启停 |
 | `xpier db:create <name> [--db mysql]` | 创建数据库 |
 | `xpier db [db] [--site name]` | 打开内置 Adminer(`database.<tld>`,默认名被占用时自动用随机唯一域名 `db-xxxx.<tld>`,`--site` 可显式指定);带 db 时预填该数据库名 |
@@ -95,6 +99,7 @@
 | `xpier share:stop [site]` | 停止隧道 |
 | `xpier mail:up / mail:down / mail` | Mailpit:SMTP 127.0.0.1:1025,UI http://127.0.0.1:8025 |
 | `xpier xdebug [status\|on\|off] [--php 8.2]` | 切换 xdebug 模式 |
+| `xpier debug:start` / `debug:stop` | 开关 xdebug 并立即重启 php-fpm(Herd 对齐) |
 
 ## PHP / Node 工具
 

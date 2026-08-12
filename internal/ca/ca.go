@@ -225,8 +225,20 @@ func CmdSecured(args []string) error {
 	for name := range sites.Sites {
 		names = append(names, name)
 	}
+	var httpOnly []string
 	for _, name := range names {
+		site := sites.Sites[name]
+		if site.Secure != nil && !*site.Secure {
+			httpOnly = append(httpOnly, name)
+			continue
+		}
 		fmt.Printf("  %-30s https://%s\n", store.SiteDomain(sites, name), store.SiteDomain(sites, name))
+	}
+	if len(httpOnly) > 0 {
+		fmt.Println("http-only (xpier unsecure):")
+		for _, name := range httpOnly {
+			fmt.Printf("  %-30s http://%s\n", store.SiteDomain(sites, name), store.SiteDomain(sites, name))
+		}
 	}
 	return nil
 }

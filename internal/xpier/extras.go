@@ -7,10 +7,54 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"xpier/internal/nginx"
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
+
+// --- debug:start / debug:stop (Herd parity: toggle + immediate fpm restart) ---
+
+func debugVersionFromArgs(args []string) string {
+	for i, a := range args {
+		if a == "--php" && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(a, "--php=") {
+			return strings.TrimPrefix(a, "--php=")
+		}
+	}
+	return nginx.DefaultPhpVersion()
+}
+
+func restartFpmForDebug(ver string) error {
+	service.FpmDown(ver) // best effort: may not be running
+	if err := service.FpmUp(ver); err != nil {
+		return err
+	}
+	fmt.Printf("php-fpm %s restarted (xdebug applies to new requests)\n", ver)
+	return nil
+}
+
+// cmdDebugStart enables xdebug and restarts php-fpm so breakpoints work
+// immediately (Herd's debug:start).
+func cmdDebugStart(args []string) error {
+	ver := debugVersionFromArgs(args)
+	if err := cmdXdebug([]string{"--php", ver, "on"}); err != nil {
+		return err
+	}
+	return restartFpmForDebug(ver)
+}
+
+// cmdDebugStop disables xdebug and restarts php-fpm.
+func cmdDebugStop(args []string) error {
+	ver := debugVersionFromArgs(args)
+	if err := cmdXdebug([]string{"--php", ver, "off"}); err != nil {
+		return err
+	}
+	return restartFpmForDebug(ver)
+}
 
 // --- Mailpit (mail capture) ---
 

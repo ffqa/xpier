@@ -56,3 +56,24 @@ func cmdInit(args []string) error {
 	fmt.Println("manifest is optional: xpier auto-detects runtime and PHP; the manifest only pins them.")
 	return nil
 }
+
+// cmdInitFresh discards the project's pins and recreates a default manifest
+// (Herd's init:fresh).
+func cmdInitFresh(args []string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	manifestPath, lockPath := store.ResolvePaths(cwd)
+	os.Remove(manifestPath)
+	os.Remove(lockPath)
+	m := store.DefaultManifest()
+	if err := store.EnsureProjectDir(cwd); err != nil {
+		return err
+	}
+	if err := m.Save(manifestPath); err != nil {
+		return err
+	}
+	fmt.Printf("recreated %s (defaults; run `xpier init --php 8.2` to re-pin)\n", manifestPath)
+	return nil
+}

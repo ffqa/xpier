@@ -23,6 +23,10 @@ func Run(args []string) error {
 	switch args[0] {
 	case "init":
 		return cmdInit(args[1:])
+	case "init:fresh":
+		return cmdInitFresh(args[1:])
+	case "laravel:update":
+		return cmdLaravelUpdate(args[1:])
 	case "sync":
 		return cmdSync(args[1:])
 	case "doctor":
@@ -147,6 +151,10 @@ func Run(args []string) error {
 		return cmdMail(args[1:])
 	case "xdebug":
 		return cmdXdebug(args[1:])
+	case "debug:start":
+		return cmdDebugStart(args[1:])
+	case "debug:stop":
+		return cmdDebugStop(args[1:])
 	case "tinker":
 		return cmdTinker(args[1:])
 	case "directory-listing":
@@ -167,6 +175,12 @@ func Run(args []string) error {
 		return cmdFetchShareURL(args[1:])
 	case "services":
 		return service.CmdServices(args[1:])
+	case "services:available":
+		return service.CmdServicesAvailable(args[1:])
+	case "services:versions":
+		return service.CmdServicesVersions(args[1:])
+	case "services:create":
+		return service.CmdServicesCreate(args[1:])
 	case "services:stop":
 		return service.CmdServicesStop(args[1:])
 	case "services:start":
