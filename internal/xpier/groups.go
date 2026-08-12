@@ -75,6 +75,9 @@ func cmdNamespace(args []string) error {
 		fmt.Println("run `xpier <group>` for a group's commands, `xpier help` for the full manual")
 		return nil
 	}
+	if len(args) > 1 {
+		return fmt.Errorf("unknown %s subcommand %q; run `xpier %s` for the group's commands", name, args[1], name)
+	}
 	lines, ok := namespaceGroups[name]
 	if !ok {
 		return fmt.Errorf("unknown namespace %q (app|site|tls|svc|config|env|groups)", name)
