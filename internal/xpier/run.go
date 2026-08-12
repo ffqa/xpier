@@ -51,6 +51,18 @@ func Run(args []string) error {
 		return service.CmdInstall(args[1:])
 	case "refresh":
 		return cmdRefresh(args[1:])
+	case "paths":
+		return sites.CmdPaths(args[1:])
+	case "which":
+		return sites.CmdWhich(args[1:])
+	case "which-php":
+		return sites.CmdWhichPHP(args[1:])
+	case "use":
+		return sites.CmdUse(args[1:])
+	case "unsecure":
+		return sites.CmdUnsecure(args[1:])
+	case "php:list":
+		return service.CmdPhpList(args[1:])
 	case "link":
 		return sites.CmdLink(args[1:])
 	case "unlink":

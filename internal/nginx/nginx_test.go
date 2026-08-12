@@ -288,3 +288,43 @@ func TestWriteDefaultSiteConfigUsesCurrentTLD(t *testing.T) {
 		t.Errorf("default site cert should reference current TLD:\n%s", conf)
 	}
 }
+
+func TestDefaultPhpVersionPinned(t *testing.T) {
+	homeTemp(t)
+	s := store.DefaultSites()
+	s.DefaultPHP = "7.4"
+	if err := s.Save(); err != nil {
+		t.Fatal(err)
+	}
+	if got := DefaultPhpVersion(); got != "7.4" {
+		t.Errorf("pinned default = %q, want 7.4", got)
+	}
+}
+
+func TestWriteSiteNginxConfigUnsecure(t *testing.T) {
+	homeTemp(t)
+	f := false
+	s := &store.Sites{TLD: "test", Sites: map[string]store.Site{
+		"http": {Path: "/srv/http", Driver: "laravel", PHP: "8.2", Secure: &f},
+	}}
+	if err := WriteSiteNginxConfig(s, "http"); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(SiteConfPath("http"))
+	conf := string(data)
+	if strings.Contains(conf, "443") || strings.Contains(conf, "ssl_certificate") {
+		t.Errorf("unsecure site should have no TLS:\n%s", conf)
+	}
+	if !strings.Contains(conf, "listen 80;") {
+		t.Errorf("unsecure site missing listen 80:\n%s", conf)
+	}
+	// Default (Secure nil) still has TLS.
+	s2 := siteSet(t)
+	if err := WriteSiteNginxConfig(s2, "larablog"); err != nil {
+		t.Fatal(err)
+	}
+	data, _ = os.ReadFile(SiteConfPath("larablog"))
+	if !strings.Contains(string(data), "listen 443 ssl;") {
+		t.Error("default site should keep TLS")
+	}
+}

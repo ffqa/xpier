@@ -54,9 +54,10 @@ type AppConfig struct {
 }
 
 type Sites struct {
-	TLD    string          `yaml:"tld"`
-	Parked []string        `yaml:"parked,omitempty"`
-	Sites  map[string]Site `yaml:"sites"`
+	TLD        string          `yaml:"tld"`
+	Parked     []string        `yaml:"parked,omitempty"`
+	DefaultPHP string          `yaml:"default_php,omitempty"`
+	Sites      map[string]Site `yaml:"sites"`
 }
 
 type Site struct {
@@ -64,6 +65,9 @@ type Site struct {
 	PHP    string `json:"php,omitempty"`
 	Node   string `json:"node,omitempty"`
 	Driver string `json:"driver"`
+	// Secure is nil by default (https on). Set to false via `xpier unsecure`
+	// to serve a site over plain http only.
+	Secure *bool `json:"secure,omitempty"`
 }
 
 type Lock struct {

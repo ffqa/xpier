@@ -896,6 +896,54 @@ func clearAppCaches(app store.App, force bool) {
 	fmt.Println("  cleared compiled caches")
 }
 
+// serviceLogPath resolves the log file for a built-in service name
+// (nginx, dnsmasq, php-fpm[-<ver>], mailpit), or "" for app names.
+func serviceLogPath(name string) string {
+	switch {
+	case name == "nginx":
+		return filepath.Join(nginx.NginxHome(), "error.log")
+	case name == "dnsmasq":
+		return filepath.Join(store.XpierHome(), "logs", "com.xpier.dnsmasq.err.log")
+	case strings.HasPrefix(name, "php-fpm"):
+		ver := strings.TrimPrefix(name, "php-fpm-")
+		if ver == name || ver == "" {
+			ver = nginx.DefaultPhpVersion()
+		}
+		return filepath.Join(store.XpierHome(), "logs", "php-fpm-"+ver+".log")
+	case name == "mailpit":
+		return filepath.Join(store.XpierHome(), "logs", "mailpit.log")
+	}
+	return ""
+}
+
+func tailFile(path string, follow bool, prefix string) error {
+	if !store.FileExists(path) {
+		return fmt.Errorf("log not found at %s", path)
+	}
+	if follow {
+		args := []string{"-f"}
+		if prefix != "" {
+			args = append(args, "-n", "0")
+		}
+		cmd := exec.Command("tail", append(args, path)...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if prefix != "" {
+		for _, line := range strings.Split(string(data), "\n") {
+			fmt.Printf("%s %s\n", prefix, line)
+		}
+		return nil
+	}
+	fmt.Print(string(data))
+	return nil
+}
+
 func CmdLog(args []string) error {
 	follow := false
 	rest := make([]string, 0, len(args))
@@ -907,35 +955,130 @@ func CmdLog(args []string) error {
 		}
 	}
 	if len(rest) < 1 {
-		return fmt.Errorf("usage: xpier log <app> [-f]")
+		return fmt.Errorf("usage: xpier log <app|nginx|dnsmasq|php-fpm|mailpit> [-f]")
+	}
+	name := rest[0]
+	if path := serviceLogPath(name); path != "" {
+		return tailFile(path, follow, "")
 	}
 	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err
 	}
 	ns := cfg.Namespace
-	name := rest[0]
 	s, err := store.LoadAppState(ns, name)
 	if err != nil {
-		return fmt.Errorf("app %s not running (start with `xpier up`)", name)
+		return fmt.Errorf("app %s not running (start with `xpier up`); or use a service log: nginx|dnsmasq|php-fpm|mailpit", name)
 	}
-	if follow {
-		cmd := exec.Command("tail", "-f", s.Log)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		return cmd.Run()
-	}
-	data, err := os.ReadFile(s.Log)
-	if err != nil {
-		return err
-	}
-	fmt.Print(string(data))
-	return nil
+	return tailFile(s.Log, follow, "")
 }
 
 var appLogColors = []string{"\x1b[36m", "\x1b[32m", "\x1b[33m", "\x1b[35m", "\x1b[34m"}
 
+// tailAllLogs tails the running apps plus nginx + php-fpm service logs
+// (Herd's `herd logs` shows everything, nginx included).
+func tailAllLogs() error {
+	cfg, _, err := LoadAppConfig()
+	if err != nil {
+		return err
+	}
+	ns := cfg.Namespace
+	names := make([]string, 0, len(cfg.Apps))
+	for n, app := range cfg.Apps {
+		if appRunning(ns, n, app) {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	var logs []string
+	for _, n := range names {
+		if s, err := store.LoadAppState(ns, n); err == nil {
+			path := s.Log
+			if path == "" || !store.FileExists(path) {
+				path = store.AppLogPath(ns, n)
+			}
+			if store.FileExists(path) {
+				logs = append(logs, path)
+			}
+		}
+	}
+	// Service logs, best effort (files may not exist yet).
+	svcPrefixes := []struct{ path, prefix string }{
+		{serviceLogPath("nginx"), "[nginx]"},
+		{serviceLogPath("php-fpm"), "[php-fpm]"},
+	}
+	for _, sp := range svcPrefixes {
+		if sp.path != "" && store.FileExists(sp.path) {
+			logs = append(logs, sp.path)
+			_ = sp.prefix
+		}
+	}
+	if len(logs) == 0 {
+		return fmt.Errorf("no logs to tail (start apps with `xpier up`, or check service logs)")
+	}
+	lineCh := make(chan string, 64)
+	var wg sync.WaitGroup
+	started := 0
+	for _, path := range logs {
+		prefix := ""
+		for _, sp := range svcPrefixes {
+			if sp.path == path {
+				prefix = sp.prefix
+			}
+		}
+		if prefix == "" {
+			for _, n := range names {
+				if st, err := store.LoadAppState(ns, n); err == nil {
+					path2 := st.Log
+					if path2 == "" || !store.FileExists(path2) {
+						path2 = store.AppLogPath(ns, n)
+					}
+					if path2 == path {
+						prefix = "[" + n + "]"
+					}
+				}
+			}
+		}
+		cmd := exec.Command("tail", "-f", "-n", "0", path)
+		cmd.Stderr = os.Stderr
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			continue
+		}
+		if err := cmd.Start(); err != nil {
+			continue
+		}
+		started++
+		defer cmd.Process.Kill()
+		wg.Add(1)
+		idx := started - 1
+		go func(p, name string, out io.Reader) {
+			defer wg.Done()
+			sc := bufio.NewScanner(out)
+			sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+			color := appLogColors[idx%len(appLogColors)]
+			for sc.Scan() {
+				lineCh <- fmt.Sprintf("%s%s\x1b[0m %s", color, name, sc.Text())
+			}
+		}(path, prefix, stdout)
+	}
+	if started == 0 {
+		return fmt.Errorf("no logs could be tailed")
+	}
+	go func() {
+		wg.Wait()
+		close(lineCh)
+	}()
+	for line := range lineCh {
+		fmt.Println(line)
+	}
+	return nil
+}
+
 func CmdLogsAll(args []string) error {
+	if len(args) > 0 && args[0] == "all" {
+		return tailAllLogs()
+	}
 	cfg, _, err := LoadAppConfig()
 	if err != nil {
 		return err

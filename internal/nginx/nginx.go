@@ -61,8 +61,14 @@ http {
 	return os.WriteFile(filepath.Join(NginxHome(), "nginx.conf"), []byte(conf), 0o644)
 }
 
-// DefaultPhpVersion picks the highest brew php@X installed, falling back to 8.2.
+// DefaultPhpVersion returns the pinned default (`xpier use`), else the
+// highest brew php@X installed, else 8.2.
 func DefaultPhpVersion() string {
+	if sites, err := store.LoadSites(); err == nil && sites.DefaultPHP != "" {
+		if isVersionString(sites.DefaultPHP) {
+			return sites.DefaultPHP
+		}
+	}
 	best := ""
 	entries, err := os.ReadDir(filepath.Join(store.BrewPrefix(), "opt"))
 	if err != nil {
@@ -154,10 +160,15 @@ func WriteSiteNginxConfigWithNames(sites *store.Sites, name string, extra []stri
 	var conf strings.Builder
 	conf.WriteString("server {\n")
 	conf.WriteString("    listen 80;\n")
-	conf.WriteString("    listen 443 ssl;\n")
+	httpsOn := site.Secure == nil || *site.Secure
+	if httpsOn {
+		conf.WriteString("    listen 443 ssl;\n")
+	}
 	fmt.Fprintf(&conf, "    server_name %s;\n", serverNames)
-	fmt.Fprintf(&conf, "    ssl_certificate     %s;\n", cert)
-	fmt.Fprintf(&conf, "    ssl_certificate_key %s;\n", certKey)
+	if httpsOn {
+		fmt.Fprintf(&conf, "    ssl_certificate     %s;\n", cert)
+		fmt.Fprintf(&conf, "    ssl_certificate_key %s;\n", certKey)
+	}
 	fmt.Fprintf(&conf, "    root \"%s\";\n", root)
 	conf.WriteString("    index index.php index.html;\n")
 	if site.Driver == "hyperf" {

@@ -366,3 +366,53 @@ func TestDnsmasqStatusConsistent(t *testing.T) {
 		t.Errorf("dnsmasq status inconsistent: sites=%q services=%q", s1, s2)
 	}
 }
+
+func TestCmdUse(t *testing.T) {
+	homeTemp(t)
+	if err := CmdUse(nil); err != nil {
+		t.Errorf("CmdUse get = %v", err)
+	}
+	if err := CmdUse([]string{"9"}); err == nil {
+		t.Error("invalid php should error")
+	}
+	if err := CmdUse([]string{"99.9"}); err == nil {
+		t.Error("uninstalled php should error")
+	}
+	// 8.2 is installed on this machine (used throughout the suite).
+	if !store.FileExists(phpBinForVer("8.2")) {
+		t.Skip("php@8.2 not installed")
+	}
+	if err := CmdUse([]string{"8.2"}); err != nil {
+		t.Fatalf("CmdUse 8.2 = %v", err)
+	}
+	s, _ := store.LoadSites()
+	if s.DefaultPHP != "8.2" {
+		t.Errorf("DefaultPHP = %q", s.DefaultPHP)
+	}
+}
+
+func TestCmdUnsecure(t *testing.T) {
+	homeTemp(t)
+	regSite(t, "abc", store.Site{Path: "/srv/abc", Driver: "laravel"})
+	if err := CmdUnsecure([]string{"abc"}); err != nil {
+		t.Fatalf("CmdUnsecure = %v", err)
+	}
+	s, _ := store.LoadSites()
+	if s.Sites["abc"].Secure == nil || *s.Sites["abc"].Secure {
+		t.Error("site should be marked unsecure")
+	}
+	if err := CmdUnsecure([]string{"zzz"}); err == nil {
+		t.Error("unknown site should error")
+	}
+}
+
+func TestCmdPaths(t *testing.T) {
+	homeTemp(t)
+	if err := CmdPaths(nil); err != nil {
+		t.Errorf("CmdPaths empty = %v", err)
+	}
+	regSite(t, "abc", store.Site{Path: "/srv/abc", Driver: "laravel"})
+	if err := CmdPaths(nil); err != nil {
+		t.Errorf("CmdPaths = %v", err)
+	}
+}

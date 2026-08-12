@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"testing"
 
+	"xpier/internal/nginx"
 	"xpier/internal/store"
 )
 
@@ -402,5 +403,31 @@ func TestMigrateStateLogs(t *testing.T) {
 	}
 	if got.Log != store.AppLogPath("ns", "web") {
 		t.Errorf("Log = %q, want %q", got.Log, store.AppLogPath("ns", "web"))
+	}
+}
+
+func TestServiceLogPath(t *testing.T) {
+	homeTemp(t)
+	if got := serviceLogPath("nginx"); !strings.HasSuffix(got, "/nginx/error.log") {
+		t.Errorf("nginx log = %q", got)
+	}
+	if got := serviceLogPath("php-fpm"); !strings.HasSuffix(got, "/logs/php-fpm-"+nginx.DefaultPhpVersion()+".log") {
+		t.Errorf("php-fpm log = %q", got)
+	}
+	if got := serviceLogPath("php-fpm-8.2"); !strings.HasSuffix(got, "/logs/php-fpm-8.2.log") {
+		t.Errorf("php-fpm-8.2 log = %q", got)
+	}
+	if got := serviceLogPath("mailpit"); !strings.HasSuffix(got, "/logs/mailpit.log") {
+		t.Errorf("mailpit log = %q", got)
+	}
+	if got := serviceLogPath("app"); got != "" {
+		t.Errorf("unknown service = %q, want empty", got)
+	}
+}
+
+func TestCmdLogServiceMissing(t *testing.T) {
+	homeTemp(t)
+	if err := CmdLog([]string{"nginx"}); err == nil {
+		t.Error("log nginx with no nginx log should error")
 	}
 }

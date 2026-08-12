@@ -258,3 +258,136 @@ func CmdSites(args []string) error {
 	}
 	return nil
 }
+
+// CmdPaths lists every registered project path: parked dirs plus site paths.
+func CmdPaths(args []string) error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	if len(sites.Parked) == 0 && len(sites.Sites) == 0 {
+		fmt.Println("no sites or parked paths yet (link or park something first)")
+		return nil
+	}
+	fmt.Println("parked:")
+	for _, p := range sites.Parked {
+		fmt.Printf("  %s\n", p)
+	}
+	fmt.Println("sites:")
+	for _, name := range store.SortedKeys(sites.Sites) {
+		fmt.Printf("  %-28s %s\n", store.SiteDomain(sites, name), sites.Sites[name].Path)
+	}
+	return nil
+}
+
+// CmdWhich prints the PHP version used by the current directory's site
+// (site pin, manifest, or the global default).
+func CmdWhich(args []string) error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	if _, site, err := ResolveSite(sites, ""); err == nil && site.PHP != "" {
+		fmt.Println(site.PHP)
+		return nil
+	}
+	if m, err := nginx.LoadManifestFrom(cwd); err == nil && m.PHP != "" {
+		fmt.Println(m.PHP)
+		return nil
+	}
+	fmt.Println(nginx.DefaultPhpVersion())
+	return nil
+}
+
+// CmdWhichPHP prints the full php binary path + version for the current site.
+func CmdWhichPHP(args []string) error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	_, site, err := ResolveSite(sites, "")
+	if err != nil {
+		return fmt.Errorf("%v (run from a linked site or pass --site)", err)
+	}
+	bin, ver, err := SitePHPBin(site)
+	if err != nil {
+		return err
+	}
+	out, err := store.RunOut(bin, "-v")
+	if err != nil {
+		return err
+	}
+	first := strings.SplitN(out, "\n", 2)[0]
+	fmt.Printf("%s (%s)\n", bin, first)
+	_ = ver
+	return nil
+}
+
+// CmdUse pins the global default PHP version (`xpier use 8.3`).
+func CmdUse(args []string) error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	if len(args) < 1 {
+		if sites.DefaultPHP != "" {
+			fmt.Printf("default PHP: %s\n", sites.DefaultPHP)
+		} else {
+			fmt.Printf("default PHP: %s (auto)\n", nginx.DefaultPhpVersion())
+		}
+		return nil
+	}
+	ver := args[0]
+	if !store.SafePhpRe.MatchString(ver) {
+		return fmt.Errorf("invalid php version %q", ver)
+	}
+	if !store.FileExists(phpBinForVer(ver)) {
+		return fmt.Errorf("php@%s not installed (run `xpier php:install %s` or brew install shivammathur/php/php@%s)", ver, ver, ver)
+	}
+	sites.DefaultPHP = ver
+	if err := sites.Save(); err != nil {
+		return err
+	}
+	fmt.Printf("default PHP set to %s\n", ver)
+	return nil
+}
+
+func phpBinForVer(ver string) string {
+	return filepath.Join(store.BrewPrefix(), "opt", "php@"+ver, "bin", "php")
+}
+
+// CmdUnsecure serves a site over plain http only (removes its 443 block).
+func CmdUnsecure(args []string) error {
+	sites, err := store.LoadSites()
+	if err != nil {
+		return err
+	}
+	name := ""
+	if len(args) > 0 {
+		name = args[0]
+	} else if cwd, err := os.Getwd(); err == nil {
+		name = filepath.Base(cwd)
+	}
+	site, ok := sites.Sites[name]
+	if !ok {
+		return fmt.Errorf("site %s is not linked", name)
+	}
+	f := false
+	site.Secure = &f
+	sites.Sites[name] = site
+	if err := sites.Save(); err != nil {
+		return err
+	}
+	if err := nginx.WriteSiteNginxConfig(sites, name); err != nil {
+		return err
+	}
+	if err := nginx.NginxReload(); err != nil {
+		fmt.Printf("[warn] nginx reload failed: %v\n", err)
+	}
+	fmt.Printf("%s now serves over http only (run `xpier secure %s` to re-enable https)\n", store.SiteDomain(sites, name), name)
+	return nil
+}

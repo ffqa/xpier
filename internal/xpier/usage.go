@@ -8,50 +8,73 @@ func usage() {
 	fmt.Printf(`xpier %s - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
 
 Apps (multi-project orchestration, from dev.yaml / xpier.yaml apps):
-  xpier app                              list all app:* commands (bare namespace)
-  xpier app:init [dir] [--force]       generate a commented dev.yaml template + guide
-  xpier up / app:up                    start ALL apps (refuses if any already running)
+  xpier app / app:init [dir] [--force]   group help / generate a commented dev.yaml template
+  xpier up / app:up                      start ALL apps (refuses if any already running)
   xpier start <app> / app:start [--force]   start one app (--force = restart with cache clear)
-  xpier down / app:down                stop all apps and clean nginx mappings
+  xpier down / app:down                  stop all apps and clean nginx mappings
   xpier restart <app> / app:restart [--force]   kill + start one app (--force clears compiled caches)
-  xpier status                          pins, lock, and app stack table
-  xpier log <app> / app:log [-f]       one app log / all apps together (logs / app:logs)
-  xpier url [app] / app:url            show app URLs
+  xpier status                           pins, lock, and app stack table
+  xpier log <app|svc> / app:log [-f]     one app or service log (nginx, dnsmasq, php-fpm, mailpit)
+  xpier logs / app:logs [all]            all app logs together (all = + service logs)
+  xpier url [app] / app:url              show app URLs
 
-Sites:
-  xpier link [name] [--php 8.2]         link current directory as a site (name.test)
-  xpier park <dir> [...]                serve every subdirectory of a directory as a site
-  xpier unlink [name]                   remove a site
-  xpier sites / links / parked / isolated   list sites, links, parked dirs, isolated sites
-  xpier sites:up / sites:down           start/stop php-fpm for linked sites
-  xpier site:php <site> [version]       show or set a site's PHP version
-  xpier isolate <ver> / unisolate       pin/unpin current site's PHP version
-  xpier open [site] / edit [site]       open site in browser / IDE
-  xpier site-information <site>         show site details
-  xpier secure [domain] / secured       trust xpier CA + sign certs / list https sites
-  xpier proxy <domain> <host> / proxies / unproxy   reverse proxy to any local service (meilisearch, docker, ...)
+Sites & Projects:
+  xpier link [name] [--php 8.2]          link current directory as a site (name.test)
+  xpier park <dir> [...]                 serve every subdirectory of a directory as a site
+  xpier unlink [name] / forget           remove a site / forget the current directory
+  xpier paths / sites / links / parked   list project paths / sites / links / parked dirs
+  xpier open [site] / edit [site]        open site in browser / IDE
+  xpier site-information <site>          show site details
+  xpier db [db] [--site name]            open built-in Adminer (auto-detects MySQL)
 
-Runtime services:
-  xpier install                         one-time sudo setup: nginx + dnsmasq launchd daemons, certs, sudoers
-  xpier services / service <svc> <act>  service overview / per-service control (nginx, dnsmasq, php-fpm)
+PHP Version Management:
+  xpier use [8.3]                        show / set the global default PHP version
+  xpier php:list / php:install <ver>     list installed PHP / install one via brew
+  xpier isolate <ver> / unisolate        pin/unpin current site's PHP version
+  xpier isolated                         list PHP-isolated sites
+  xpier which / which-php                current site's PHP version / binary path
+  xpier site:php <site> [version]        show or set a site's PHP version
+  xpier php/composer [--site x] args     run with the site's PHP
+  xpier ini [--php 8.2]                  open a PHP version's php.ini
 
-Environment:
+Node.js Version Management:
+  xpier isolate-node <ver> / unisolate-node / isolated-node   per-site Node via nvm
+  xpier node [--site x] args             run with the site's Node
+
+SSL/TLS:
+  xpier secure [domain] / unsecure <site> / secured   trust CA + sign certs / http-only / list https
+
+Proxies:
+  xpier proxy <domain> <host> / proxies / unproxy   reverse proxy to any local service
+
+Services:
+  xpier install                          one-time sudo setup: nginx + dnsmasq daemons, certs, sudoers
+  xpier services / services:start|stop   service overview / start-stop daemons + site fpm
+  xpier service <svc> <act>              per-service control (nginx, dnsmasq, php-fpm)
+  xpier sites:up / sites:down            start/stop php-fpm for linked sites
+  xpier db:install|start|stop <svc>      manage MySQL/MariaDB/Redis/Postgres (brew services)
+  xpier db:create <name> [--db mysql]    create a database
+  xpier mail:up / mail:down / mail       Mailpit mail capture (SMTP 1025, UI 8025)
+
+Debugging:
+  xpier debug / coverage [--site x]      run with xdebug / coverage enabled
+  xpier xdebug [status|on|off] [--php 8.2]   toggle xdebug per PHP version
+  xpier tinker [--site x]                Laravel / Hyperf tinker (auto-detected)
+
+Sharing:
+  xpier share [site|--port N]            tunnel share via cloudflared (managed background)
+  xpier shares / share:stop [site]       list tunnels / stop a tunnel
+  xpier fetch-share-url                  print the tunnel URL of a running share
+
+Configuration:
+  xpier tld [x] / loopback [x]           get/set TLD / loopback
+  xpier directory-listing [on|off]       toggle nginx autoindex
+
+Environment & Tooling:
   xpier init [--php 8.2] [--runtime hyperf] [.]  pin versions in ~/.xpier/projects (or '.' in repo)
-  xpier sync [--apply]                  resolve pins; --apply runs brew and writes xpier.lock
-  xpier doctor                          check environment + composer check-platform-reqs
-
-Extras:
-  xpier php/composer/debug/coverage [--site x] args   run with the site's PHP
-  xpier db:install|start|stop <svc>     manage MySQL/MariaDB/Redis/Postgres (brew services)
-  xpier db:create <name> [--db mysql]   create a database
-  xpier db [site]                       open Adminer (database.test)
-  xpier share [site|--port N]           tunnel share via cloudflared (managed background)
-  xpier shares / share:stop [site]      list tunnels / stop a tunnel
-  xpier mail:up / mail:down / mail      Mailpit mail capture (SMTP 1025, UI 8025)
-  xpier xdebug [status|on|off] [--php 8.2]  toggle xdebug per PHP version
-  xpier tinker / directory-listing / forget   dev utilities
-  xpier isolate-node <ver> / node       per-app node version via nvm
-  xpier tld [x] / loopback [x]          get/set TLD / loopback
-  xpier completion [bash|zsh]           shell completion
-  xpier --version / -v                  show version`, Version)
+  xpier sync [--apply]                   resolve pins; --apply runs brew and writes xpier.lock
+  xpier doctor                           check environment + composer check-platform-reqs
+  xpier refresh                          regenerate all configs after a home move
+  xpier completion [bash|zsh]            shell completion
+  xpier --version / -v                   show version`, Version)
 }

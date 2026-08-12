@@ -286,3 +286,10 @@ func TestFpmDownLiveButNotOurs(t *testing.T) {
 		t.Error("stale fpm state should be removed")
 	}
 }
+
+func TestCmdPhpList(t *testing.T) {
+	homeTemp(t)
+	if err := CmdPhpList(nil); err != nil {
+		t.Fatalf("CmdPhpList = %v", err)
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"xpier/internal/nginx"
 	"xpier/internal/share"
@@ -272,4 +273,93 @@ func startSiteFpms() error {
 		}
 	}
 	return nil
+}
+
+// CmdPhpList lists installed PHP versions (brew opt/php@*), marking the
+// global default (`xpier use`) and the auto-selected default.
+func CmdPhpList(args []string) error {
+	entries, err := os.ReadDir(filepath.Join(store.BrewPrefix(), "opt"))
+	if err != nil {
+		return fmt.Errorf("no PHP versions found under %s/opt", store.BrewPrefix())
+	}
+	type phpVer struct {
+		ver  string
+		bin  string
+		full string
+	}
+	var list []phpVer
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasPrefix(name, "php@") {
+			continue
+		}
+		ver := strings.TrimPrefix(name, "php@")
+		if !isPhpVer(ver) {
+			continue
+		}
+		bin := filepath.Join(store.BrewPrefix(), "opt", name, "bin", "php")
+		full := ""
+		if out, err := store.RunOut(bin, "-v"); err == nil {
+			if first := strings.SplitN(out, "\n", 2)[0]; first != "" {
+				full = first
+			}
+		}
+		list = append(list, phpVer{ver, bin, full})
+	}
+	if len(list) == 0 {
+		return fmt.Errorf("no PHP versions installed (brew install shivammathur/php/php@8.2)")
+	}
+	defaultVer := ""
+	if sites, err := store.LoadSites(); err == nil {
+		defaultVer = sites.DefaultPHP
+	}
+	if defaultVer == "" {
+		defaultVer = nginx.DefaultPhpVersion()
+	}
+	sort.Slice(list, func(i, j int) bool {
+		return comparePhpVer(list[i].ver, list[j].ver) < 0
+	})
+	fmt.Printf("%-8s %-5s %s\n", "VERSION", "DEFAULT", "PHP BINARY")
+	for _, p := range list {
+		mark := ""
+		if p.ver == defaultVer {
+			mark = "default"
+		}
+		fmt.Printf("%-8s %-5s %s\n", p.ver, mark, p.bin)
+		if p.full != "" {
+			fmt.Printf("         %s\n", p.full)
+		}
+	}
+	return nil
+}
+
+func isPhpVer(v string) bool {
+	parts := strings.Split(v, ".")
+	if len(parts) != 2 {
+		return false
+	}
+	for _, p := range parts {
+		if p == "" {
+			return false
+		}
+		for _, r := range p {
+			if r < '0' || r > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func comparePhpVer(a, b string) int {
+	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
+	var x, y int
+	fmt.Sscanf(pa[0], "%d", &x)
+	fmt.Sscanf(pb[0], "%d", &y)
+	if x != y {
+		return x - y
+	}
+	fmt.Sscanf(pa[1], "%d", &x)
+	fmt.Sscanf(pb[1], "%d", &y)
+	return x - y
 }
