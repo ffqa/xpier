@@ -1,6 +1,30 @@
 package xpier
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	"xpier/internal/store"
+)
+
+var usagePadRe = regexp.MustCompile(` {3,}`)
+
+// paintUsageLine colors an indented usage line: command in green, the
+// description after the column padding in gray.
+func paintUsageLine(line string) string {
+	trimmed := strings.TrimLeft(line, " ")
+	if !strings.HasPrefix(trimmed, "xpier") {
+		return line
+	}
+	indent := line[:len(line)-len(trimmed)]
+	if loc := usagePadRe.FindStringIndex(trimmed); loc != nil {
+		cmd := strings.TrimRight(trimmed[:loc[0]], " ")
+		desc := trimmed[loc[1]:]
+		return indent + store.Green(cmd) + "   " + store.Gray(desc)
+	}
+	return indent + store.Green(trimmed)
+}
 
 // namespaceGroups maps a bare namespace word to its subcommand usage lines.
 // The Run dispatcher prints the group when the bare word is typed and no
@@ -67,12 +91,13 @@ func cmdNamespace(args []string) error {
 		name = args[0]
 	}
 	if name == "groups" {
-		fmt.Println("xpier groups:")
+		fmt.Println(store.Bold(store.Cyan("xpier groups:")))
 		for _, g := range []string{"app", "site", "tls", "svc", "config", "env"} {
-			fmt.Printf("  %-8s %s\n", g, namespaceGroups[g][0])
+			first := namespaceGroups[g][0]
+			fmt.Printf("  %s %s\n", store.Green(g), store.Gray(first))
 		}
-		fmt.Println("  also: php (PHP group), node (Node group), debug/log (Debugging), share (Sharing), proxy (Proxies), db/mail (Services)")
-		fmt.Println("run `xpier <group>` for a group's commands, `xpier help` for the full manual")
+		fmt.Println("  " + store.Gray("also: php (PHP group), node (Node group), debug/log (Debugging), share (Sharing), proxy (Proxies), db/mail (Services)"))
+		fmt.Println("  " + store.Gray("run `xpier <group>` for a group's commands, `xpier help` for the full manual"))
 		return nil
 	}
 	if len(args) > 1 {
@@ -82,12 +107,12 @@ func cmdNamespace(args []string) error {
 	if !ok {
 		return fmt.Errorf("unknown namespace %q (app|site|tls|svc|config|env|groups)", name)
 	}
-	fmt.Printf("xpier %s: commands\n", name)
+	fmt.Printf("%s\n", store.Bold(store.Cyan("xpier "+name+": commands")))
 	for _, l := range lines {
-		fmt.Printf("  xpier %s\n", l)
+		fmt.Println(paintUsageLine("  xpier " + l))
 	}
 	if name == "app" {
-		fmt.Println("flat aliases: xpier up/start/down/restart/log/logs/url (no prefix)")
+		fmt.Println("  " + store.Gray("flat aliases: xpier up/start/down/restart/log/logs/url (no prefix)"))
 	}
 	return nil
 }

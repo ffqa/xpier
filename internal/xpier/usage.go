@@ -2,10 +2,12 @@ package xpier
 
 import (
 	"fmt"
+	"strings"
+	"xpier/internal/store"
 )
 
 func usage() {
-	fmt.Printf(`xpier %s - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
+	s := fmt.Sprintf(`xpier %s - local PHP dev server manager (project files stay in ~/.xpier, never in your repo)
 
 Apps (multi-project orchestration, from dev.yaml / xpier.yaml apps):
   xpier app / app:init [dir] [--force]   group help / generate a commented dev.yaml template
@@ -78,4 +80,21 @@ Environment & Tooling:
   xpier refresh                          regenerate all configs after a home move
   xpier completion [bash|zsh]            shell completion
   xpier --version / -v                   show version`, Version)
+	var b strings.Builder
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		t := strings.TrimRight(line, " ")
+		switch {
+		case i == 0:
+			b.WriteString(store.Bold(t))
+		case t != "" && !strings.HasPrefix(t, " ") && strings.HasSuffix(t, ":") && !strings.HasPrefix(t, "xpier"):
+			b.WriteString(store.Bold(store.Cyan(t)))
+		case strings.HasPrefix(line, "  "):
+			b.WriteString(paintUsageLine(line))
+		default:
+			b.WriteString(line)
+		}
+		b.WriteString("\n")
+	}
+	fmt.Print(b.String())
 }

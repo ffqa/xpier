@@ -516,6 +516,21 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	return os.Rename(tmp.Name(), path)
 }
 
+// style wraps s in an ANSI style code when color output is enabled.
+func style(code, s string) string {
+	if !colorEnabled() {
+		return s
+	}
+	return "\x1b[" + code + "m" + s + "\x1b[0m"
+}
+
+func Bold(s string) string   { return style("1", s) }
+func Gray(s string) string   { return style("90", s) }
+func Cyan(s string) string   { return style("36", s) }
+func Green(s string) string  { return style("32", s) }
+func Yellow(s string) string { return style("33", s) }
+func Red(s string) string    { return style("31", s) }
+
 // UpDown formats a boolean as the up/down string used by status tables.
 func UpDown(up bool) string {
 	if up {
