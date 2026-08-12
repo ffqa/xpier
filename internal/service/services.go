@@ -336,11 +336,11 @@ func CmdServicesCreate(args []string) error {
 		fmt.Printf("%s already installed\n", formula)
 	} else {
 		fmt.Printf("installing %s via brew (progress below)...\n", formula)
-		if err := store.RunOutLive("brew", "install", formula); err != nil {
+		if err := store.RunOutLiveYes("brew", "install", formula); err != nil {
 			return fmt.Errorf("brew install %s failed: %w (run it manually to see the full log)", formula, err)
 		}
 	}
-	if err := store.RunOutLive("brew", "services", "start", formula); err != nil {
+	if err := store.RunOutLiveYes("brew", "services", "start", formula); err != nil {
 		return fmt.Errorf("brew services start %s: %w", formula, err)
 	}
 	fmt.Printf("%s installed and started\n", formula)
@@ -369,11 +369,11 @@ func CmdExtInstall(args []string) error {
 		fmt.Println("[warn] brew trust shivammathur/extensions: " + err.Error())
 	}
 	// Tap may already exist; failure is not fatal (brew install would tap it too).
-	if err := store.RunOutLive("brew", "tap", "shivammathur/extensions"); err != nil {
+	if err := store.RunOutLiveYes("brew", "tap", "shivammathur/extensions"); err != nil {
 		fmt.Println("[warn] tap shivammathur/extensions: " + err.Error())
 	}
 	fmt.Printf("installing %s@%s via brew (progress below)...\n", ext, *ver)
-	if err := store.RunOutLive("brew", "install", "shivammathur/extensions/"+ext+"@"+*ver); err != nil {
+	if err := store.RunOutLiveYes("brew", "install", "shivammathur/extensions/"+ext+"@"+*ver); err != nil {
 		return fmt.Errorf("brew install %s@%s failed: %w (run it manually to see the full log)", ext, *ver, err)
 	}
 	fmt.Printf("%s@%s installed (restart php-fpm to load it: `xpier service php-fpm-%s restart`)\n", ext, *ver, *ver)
@@ -397,7 +397,7 @@ func CmdPhpInstall(args []string) error {
 		fmt.Println("[warn] brew trust shivammathur/php: " + err.Error())
 	}
 	fmt.Printf("installing php@%s via brew (progress below)...\n", ver)
-	if err := store.RunOutLive("brew", "install", "shivammathur/php/php@"+ver); err != nil {
+	if err := store.RunOutLiveYes("brew", "install", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew install php@%s failed: %w (run it manually to see the full log)", ver, err)
 	}
 	fmt.Printf("php@%s installed\n", ver)
@@ -422,7 +422,7 @@ func CmdPhpUpdate(args []string) error {
 		fmt.Println("[warn] brew trust shivammathur/php: " + err.Error())
 	}
 	fmt.Printf("upgrading php@%s via brew (progress below)...\n", ver)
-	if err := store.RunOutLive("brew", "upgrade", "shivammathur/php/php@"+ver); err != nil {
+	if err := store.RunOutLiveYes("brew", "upgrade", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew upgrade php@%s failed: %w (run it manually to see the full log)", ver, err)
 	}
 	fmt.Printf("php@%s upgraded\n", ver)

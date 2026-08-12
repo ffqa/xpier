@@ -146,7 +146,7 @@ func applyPlan(items []planItem) error {
 		case strings.Contains(it.command, "shivammathur/php"):
 			store.BrewTrustTap("shivammathur/php")
 		}
-		if err := store.RunOutLive("sh", "-c", it.command); err != nil {
+		if err := store.RunOutLiveYes("sh", "-c", it.command); err != nil {
 			return fmt.Errorf("%s failed: %w", it.command, err)
 		}
 	}

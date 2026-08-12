@@ -527,7 +527,7 @@ func appEnsurePHP(ver string) error {
 	if !ok {
 		return fmt.Errorf("php@%s 未安装", ver)
 	}
-	if out, err := exec.Command("brew", "install", "shivammathur/php/php@"+ver).CombinedOutput(); err != nil {
+	if out, err := store.RunOutYes("brew", "install", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew install php@%s: %v: %s", ver, err, out)
 	}
 	return nil
@@ -548,7 +548,7 @@ func appEnsureExtensions(ver string, exts []string) error {
 			return fmt.Errorf("扩展 %s 未安装", ext)
 		}
 		store.BrewTrustTap("shivammathur/extensions")
-		if out, err := exec.Command("brew", "install", "shivammathur/extensions/"+ext+"@"+ver).CombinedOutput(); err != nil {
+		if out, err := store.RunOutYes("brew", "install", "shivammathur/extensions/"+ext+"@"+ver); err != nil {
 			return fmt.Errorf("brew install %s@%s: %v: %s", ext, ver, err, out)
 		}
 	}

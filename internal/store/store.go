@@ -430,6 +430,30 @@ func BrewTrustTap(tap string) error {
 	return err
 }
 
+// RunOutYes runs a command with a pre-answered "y" stdin so brew-style
+// confirmation prompts do not hang an explicit install command.
+func RunOutYes(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	r, w, _ := os.Pipe()
+	w.WriteString("y\n")
+	w.Close()
+	cmd.Stdin = r
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+// RunOutLiveYes is RunOutLive with the same pre-answered "y" stdin.
+func RunOutLiveYes(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	r, w, _ := os.Pipe()
+	w.WriteString("y\n")
+	w.Close()
+	cmd.Stdin = r
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
 // RunOutLive runs a command with stdin/stdout/stderr attached so long
 // installs (brew) show their progress instead of buffering it.
 func RunOutLive(name string, args ...string) error {
