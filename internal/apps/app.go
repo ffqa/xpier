@@ -547,6 +547,7 @@ func appEnsureExtensions(ver string, exts []string) error {
 		if !ok {
 			return fmt.Errorf("扩展 %s 未安装", ext)
 		}
+		store.BrewTrustTap("shivammathur/extensions")
 		if out, err := exec.Command("brew", "install", "shivammathur/extensions/"+ext+"@"+ver).CombinedOutput(); err != nil {
 			return fmt.Errorf("brew install %s@%s: %v: %s", ext, ver, err, out)
 		}
