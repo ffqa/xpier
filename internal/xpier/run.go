@@ -34,7 +34,7 @@ func Run(args []string) error {
 	case "status":
 		return cmdStatus(args[1:])
 	case "app", "site", "tls", "ssl", "svc", "config", "env", "groups":
-		return cmdNamespace(args[1:])
+		return cmdNamespace(args)
 	case "app:init":
 		return apps.CmdInit(args[1:])
 	case "up", "app:up":
