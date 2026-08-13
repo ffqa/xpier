@@ -695,11 +695,14 @@ func CmdUp(args []string) error {
 		return fmt.Errorf("namespace %q 已有进程在跑，拒绝重复启动：\n  %s\n请先 `xpier down`，或 `xpier restart <app>` 单独重启",
 			ns, strings.Join(conflicts, "\n  "))
 	}
+	webUp := 0
 	for n, app := range cfg.Apps {
 		if app.Cmd == "" {
 			// Web (fpm/static) entry: `up` links it like xpier link.
 			if err := autoLinkApp(ns, n, app, cwd); err != nil {
 				fmt.Printf("  [warn] %v\n", err)
+			} else {
+				webUp++
 			}
 			continue
 		}
@@ -731,21 +734,21 @@ func CmdUp(args []string) error {
 		}
 		nginx.NginxReload()
 	}
-	webApps, procApps := 0, 0
+	procApps := 0
 	for _, app := range cfg.Apps {
-		if app.Cmd == "" {
-			webApps++
-		} else {
+		if app.Cmd != "" {
 			procApps++
 		}
 	}
 	switch {
-	case webApps > 0 && procApps == 0:
-		fmt.Printf("stack up (namespace %s): %d 个网站已注册,直接访问域名即可(`xpier sites` 查看)\n", ns, webApps)
-	case webApps > 0:
-		fmt.Printf("stack up (namespace %s): %d 网站 + %d 进程. 进程日志: `xpier app:log <app>` | 重启: `xpier restart <app>` | 停止: `xpier down`\n", ns, webApps, procApps)
-	default:
+	case webUp > 0 && procApps == 0:
+		fmt.Printf("stack up (namespace %s): %d 个网站已注册,直接访问域名即可(`xpier sites` 查看)\n", ns, webUp)
+	case webUp > 0:
+		fmt.Printf("stack up (namespace %s): %d 网站 + %d 进程. 进程日志: `xpier app:log <app>` | 重启: `xpier restart <app>` | 停止: `xpier down`\n", ns, webUp, procApps)
+	case procApps > 0:
 		fmt.Printf("stack up (namespace %s). log: `xpier app:log <app>` | restart: `xpier restart <app>` | stop: `xpier down`\n", ns)
+	default:
+		fmt.Println("nothing came up; check the warnings above")
 	}
 	return nil
 }
@@ -841,7 +844,14 @@ func CmdStatus(args []string) error {
 		pid := "0"
 		port := app.Port
 		untracked := false
-		if appRunning(ns, n, app) {
+		if app.Cmd == "" {
+			// Web-type apps are served as sites, not processes.
+			if reg, err := store.LoadSites(); err == nil {
+				if _, ok := reg.Sites[n]; ok {
+					state = "site"
+				}
+			}
+		} else if appRunning(ns, n, app) {
 			state = "up"
 		} else if anyAppPortBusy(appPorts(app, &store.AppState{})) {
 			state = "up"

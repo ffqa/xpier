@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -504,5 +505,32 @@ func TestAutoLinkApp(t *testing.T) {
 	// domain-only without domain errors
 	if err := autoLinkApp("ns", "x", store.App{Dir: dir}, "/unused"); err == nil {
 		t.Error("missing domain should error")
+	}
+}
+
+func TestCmdStatusWebTypeShowsSite(t *testing.T) {
+	homeTemp(t)
+	dir := t.TempDir()
+	chdir(t, dir)
+	writeFile(t, filepath.Join(dir, "dev.yaml"), "apps:\n  blog:\n    dir: .\n    domain: blog.test\n")
+	// Register the site like `up` would.
+	reg := store.DefaultSites()
+	reg.Sites["blog"] = store.Site{Path: dir, Driver: "laravel", Domain: "blog.test"}
+	reg.Save()
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	err := CmdStatus(nil)
+	w.Close()
+	os.Stdout = old
+	data, _ := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "site") {
+		t.Errorf("web-type app should show state=site:\n%s", data)
+	}
+	if strings.Contains(string(data), "down") {
+		t.Errorf("web-type app should not show down:\n%s", data)
 	}
 }

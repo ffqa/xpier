@@ -422,8 +422,12 @@ func SiteDomain(s *Sites, name string) string {
 		if site, ok := s.Sites[name]; ok && site.Domain != "" {
 			return site.Domain
 		}
+		if s.TLD != "" {
+			return name + "." + s.TLD
+		}
+		return name
 	}
-	return name + "." + s.TLD
+	return name
 }
 
 func SiteRoot(site Site) string {
@@ -460,6 +464,7 @@ func RunOutYes(name string, args ...string) (string, error) {
 	w.Close()
 	cmd.Stdin = r
 	out, err := cmd.CombinedOutput()
+	r.Close()
 	return string(out), err
 }
 
@@ -472,7 +477,9 @@ func RunOutLiveYes(name string, args ...string) error {
 	cmd.Stdin = r
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	err := cmd.Run()
+	r.Close()
+	return err
 }
 
 // RunOutLive runs a command with stdin/stdout/stderr attached so long
@@ -528,7 +535,7 @@ address=/.%s/127.0.0.1
 // none/no=*yellow. Plain strings pass through untouched.
 func paintWord(s string) string {
 	switch {
-	case s == "up" || strings.HasPrefix(s, "up"):
+	case s == "up" || strings.HasPrefix(s, "up") || s == "site":
 		return "\x1b[32m" + s + "\x1b[0m"
 	case s == "down":
 		return "\x1b[31m" + s + "\x1b[0m"

@@ -86,8 +86,10 @@ func socketHolder(ver string) int {
 	if err != nil {
 		return 0
 	}
-	if pid, err := strconv.Atoi(strings.TrimSpace(out)); err == nil && pid > 0 && store.PidAlive(pid) {
-		return pid
+	for _, line := range strings.Split(out, "\n") {
+		if pid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil && pid > 0 && store.PidAlive(pid) {
+			return pid
+		}
 	}
 	return 0
 }
