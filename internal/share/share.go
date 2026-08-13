@@ -21,6 +21,16 @@ type ShareState struct {
 	URL    string `json:"url"`
 	Target string `json:"target"`
 	Log    string `json:"log"`
+	// Kind is the tunnel backend: "cloudflared" or "localhost-run" (ssh).
+	Kind string `json:"kind,omitempty"`
+}
+
+// aliveMarker is the argv fragment identifying a live tunnel process.
+func aliveMarker(st *ShareState) string {
+	if st.Kind == "localhost-run" {
+		return "nokey@localhost.run"
+	}
+	return "--url " + st.Target
 }
 
 func ShareStatePath(site string) string {
@@ -58,6 +68,57 @@ func CloudflaredBin() string {
 }
 
 var trycloudflareRe = regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
+var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.lhost\.run`)
+
+// startSSHTunnel shares via localhost.run (ssh -R): no account needed, and
+// --domain picks a stable subdomain like https://myapp.lhost.run.
+func startSSHTunnel(key, target, subdomain string) (string, error) {
+	if _, err := exec.LookPath("ssh"); err != nil {
+		return "", fmt.Errorf("ssh not found (localhost-run backend needs ssh)")
+	}
+	protoPort := "80"
+	if strings.HasPrefix(target, "https://") {
+		protoPort = "443"
+	}
+	hostPort := strings.TrimPrefix(strings.TrimPrefix(target, "http://"), "https://")
+	forward := subdomain + ":" + protoPort + ":127.0.0.1:" + hostPort
+	logPath := filepath.Join(store.XpierHome(), "logs", "share-"+key+".log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	if err != nil {
+		return "", err
+	}
+	defer logFile.Close()
+	cmd := exec.Command("ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=30",
+		"-R", forward, "nokey@localhost.run")
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("start ssh tunnel: %w", err)
+	}
+	deadline := time.Now().Add(25 * time.Second)
+	tunnelURL := ""
+	for time.Now().Before(deadline) {
+		data, _ := os.ReadFile(logPath)
+		if m := lhostRunRe.FindString(string(data)); m != "" {
+			tunnelURL = m
+			break
+		}
+		if !store.PidAlive(cmd.Process.Pid) {
+			break
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
+	if tunnelURL == "" {
+		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
+		return "", fmt.Errorf("localhost.run did not produce a URL; see %s", logPath)
+	}
+	st := &ShareState{Site: key, PID: cmd.Process.Pid, URL: tunnelURL, Target: target, Log: logPath, Kind: "localhost-run"}
+	if err := SaveShareState(st); err != nil {
+		return "", err
+	}
+	return tunnelURL, nil
+}
 
 // waitTunnelRegistered waits until cloudflared's log shows it connected to
 // the Cloudflare edge (local and reliable signal).
@@ -142,7 +203,7 @@ func stopShareByKey(key string) {
 	if err != nil {
 		return
 	}
-	if store.ProcAlive(st.PID, "--url "+st.Target) {
+	if store.ProcAlive(st.PID, aliveMarker(st)) {
 		store.KillGroup(st.PID, syscall.SIGTERM)
 		time.Sleep(300 * time.Millisecond)
 		if store.PidAlive(st.PID) {
@@ -175,9 +236,10 @@ func detectOriginProto(port string) string {
 
 func CmdShare(args []string) error {
 	fs := flag.NewFlagSet("share", flag.ExitOnError)
-	backend := fs.String("backend", "cloudflared", "tunnel backend (cloudflared)")
+	backend := fs.String("backend", "cloudflared", "tunnel backend (cloudflared | localhost-run)")
 	port := fs.String("port", "", "share an existing local port (no site needed)")
 	https := fs.Bool("https", false, "origin uses HTTPS (e.g. vite basic-ssl dev server)")
+	domain := fs.String("domain", "", "stable subdomain for localhost-run backend (e.g. myapp -> https://myapp.lhost.run)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -218,11 +280,19 @@ func CmdShare(args []string) error {
 	if key == "" {
 		key = "default"
 	}
-	if st, err := LoadShareState(key); err == nil && store.ProcAlive(st.PID, "--url "+st.Target) {
+	if st, err := LoadShareState(key); err == nil && store.ProcAlive(st.PID, aliveMarker(st)) {
 		fmt.Printf("already sharing: %s (pid %d)\n", st.URL, st.PID)
 		return nil
 	}
 	switch *backend {
+	case "localhost-run":
+		tunnelURL, err := startSSHTunnel(key, url, *domain)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("sharing %s -> %s\n", url, tunnelURL)
+		fmt.Println("status: `xpier share:list` | stop: `xpier share:stop " + key + "`")
+		return nil
 	case "cloudflared":
 		tunnelURL, err := startTunnel(key, url, insecure)
 		if err != nil {
@@ -251,7 +321,7 @@ func CmdShare(args []string) error {
 		fmt.Println("status: `xpier shares` | stop: `xpier share:stop " + key + "`")
 		return nil
 	default:
-		return fmt.Errorf("unknown backend %q (cloudflared)", *backend)
+		return fmt.Errorf("unknown backend %q (cloudflared | localhost-run)", *backend)
 	}
 }
 

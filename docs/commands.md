@@ -13,7 +13,7 @@
 | `xpier xdebug [status\|on\|off] [--php 8.4]` | 切换 xdebug |
 | `xpier debug:start` / `debug:stop` | 开关 xdebug 并立即重启 php-fpm |
 | `xpier db [db] [--site name]` | 打开内置 Adminer(自动探测 MySQL,默认名被占用时随机域名) |
-| `xpier share [site\|--port N]` | cloudflared 隧道(后台托管) |
+| `xpier share [site\|--port N] [--backend cloudflared\|localhost-run] [--domain myapp]` | 隧道后台托管;`localhost-run` 后端零账号可选固定子域名(`https://myapp.lhost.run`) |
 | `xpier share:list` / `share:stop [site]` | 列出 / 停止隧道 |
 | `xpier mail` / `mail:up` / `mail:down` | Mailpit(SMTP 1025,UI 8025) |
 | `xpier secure [domain]` / `unsecure <site>` / `secured` | 证书签发 / http-only / 列表 |

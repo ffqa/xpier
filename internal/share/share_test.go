@@ -209,3 +209,15 @@ func TestCmdShareStopLiveButNotOurs(t *testing.T) {
 		t.Error("stale share state should be removed")
 	}
 }
+
+func TestAliveMarker(t *testing.T) {
+	homeTemp(t)
+	cf := &ShareState{Target: "http://127.0.0.1:80"}
+	if got := aliveMarker(cf); got != "--url http://127.0.0.1:80" {
+		t.Errorf("cloudflared marker = %q", got)
+	}
+	ssh := &ShareState{Kind: "localhost-run"}
+	if got := aliveMarker(ssh); got != "nokey@localhost.run" {
+		t.Errorf("ssh marker = %q", got)
+	}
+}
