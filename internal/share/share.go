@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -100,12 +99,8 @@ func ensureXpierKey() (priv, pub string, err error) {
 	if err := os.MkdirAll(filepath.Dir(priv), 0o700); err != nil {
 		return "", "", err
 	}
-	// Comment must not leak the real machine name into the public key.
-	comment := "xpier"
-	if u, err := user.Current(); err == nil && u.Username != "" {
-		comment = u.Username + "@xpier.local"
-	}
-	out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-f", priv, "-N", "", "-C", comment, "-q").CombinedOutput()
+	// Generic comment: never leak the real username or machine name.
+	out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-f", priv, "-N", "", "-C", "user@xpier.local", "-q").CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("ssh-keygen: %v: %s", err, out)
 	}
