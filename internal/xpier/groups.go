@@ -100,7 +100,15 @@ func cmdNamespace(args []string) error {
 			first := namespaceGroups[g][0]
 			fmt.Printf("  %s %s\n", store.Green(g), store.Gray(first))
 		}
-		fmt.Println("  " + store.Gray("also: share (Sharing), db/mail (Services), debug:start/stop (Debugging)"))
+		fmt.Println("  " + store.Gray("more families (global verb + subcommands):"))
+		for _, l := range []string{
+			"share  / share:list / share:stop      cloudflared tunnel",
+			"db     / db:install|start|stop|create  built-in Adminer + databases",
+			"mail   / mail:up / mail:down           Mailpit mail capture",
+			"debug:start / debug:stop / xdebug      xdebug toggle (immediate fpm restart)",
+		} {
+			fmt.Println("  " + paintUsageLine("  xpier "+l))
+		}
 		fmt.Println("  " + store.Gray("run `xpier <group>` for a group's commands, `xpier help` for the full manual"))
 		return nil
 	}
