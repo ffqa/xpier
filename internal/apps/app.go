@@ -794,6 +794,16 @@ func CmdDown(args []string) error {
 			nginx.NginxReload()
 		}
 		fmt.Println("stack down")
+		return nil
+	}
+	webApps := 0
+	for _, app := range cfg.Apps {
+		if app.Cmd == "" {
+			webApps++
+		}
+	}
+	if webApps > 0 {
+		fmt.Printf("没有进程型应用在跑;%d 个网站型应用仍是站点状态(`xpier sites` 查看,`xpier unlink <名字>` 移除)\n", webApps)
 	} else {
 		fmt.Println("no apps running")
 	}
@@ -1120,6 +1130,9 @@ func CmdAppLog(args []string) error {
 	}
 	ns := cfg.Namespace
 	name := rest[0]
+	if app, ok := cfg.Apps[name]; ok && app.Cmd == "" {
+		return fmt.Errorf("%s 是网站型应用(无进程日志);直接访问 %s 即可", name, appURL(app, nil))
+	}
 	s, err := store.LoadAppState(ns, name)
 	if err != nil {
 		return fmt.Errorf("app %s not running (start with `xpier up`)", name)
