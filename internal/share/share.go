@@ -68,7 +68,22 @@ func CloudflaredBin() string {
 }
 
 var trycloudflareRe = regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
-var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.lhost\.run`)
+var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.(lhost\.run|lhr\.life)`)
+
+// sshForwardSpec builds the `ssh -R` spec for localhost.run:
+// <subdomain>:<port>:localhost:<hostport> (empty subdomain = random name).
+func sshForwardSpec(target, subdomain string) string {
+	hostPort := strings.TrimPrefix(strings.TrimPrefix(target, "http://"), "https://")
+	port := hostPort
+	if i := strings.LastIndex(hostPort, ":"); i >= 0 {
+		port = hostPort[i+1:]
+	}
+	protoPort := "80"
+	if strings.HasPrefix(target, "https://") {
+		protoPort = "443"
+	}
+	return subdomain + ":" + protoPort + ":localhost:" + port
+}
 
 // startSSHTunnel shares via localhost.run (ssh -R): no account needed, and
 // --domain picks a stable subdomain like https://myapp.lhost.run.
@@ -76,12 +91,7 @@ func startSSHTunnel(key, target, subdomain string) (string, error) {
 	if _, err := exec.LookPath("ssh"); err != nil {
 		return "", fmt.Errorf("ssh not found (localhost-run backend needs ssh)")
 	}
-	protoPort := "80"
-	if strings.HasPrefix(target, "https://") {
-		protoPort = "443"
-	}
-	hostPort := strings.TrimPrefix(strings.TrimPrefix(target, "http://"), "https://")
-	forward := subdomain + ":" + protoPort + ":127.0.0.1:" + hostPort
+	forward := sshForwardSpec(target, subdomain)
 	logPath := filepath.Join(store.XpierHome(), "logs", "share-"+key+".log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
 	if err != nil {
