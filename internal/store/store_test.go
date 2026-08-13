@@ -431,3 +431,20 @@ func TestProcAlive(t *testing.T) {
 		t.Error("ProcAlive should be false for a dead pid")
 	}
 }
+
+func TestResolvePathsLegacyManifest(t *testing.T) {
+	homeTemp(t)
+	dir := filepath.Join(t.TempDir(), "proj")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Old-style local manifest is still detected.
+	legacy := filepath.Join(dir, LegacyManifestName)
+	if err := os.WriteFile(legacy, []byte("php: 8.2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mp, _ := ResolvePaths(dir)
+	if mp != legacy {
+		t.Errorf("legacy manifest not detected: %q", mp)
+	}
+}

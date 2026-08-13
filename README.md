@@ -54,7 +54,7 @@ xpier status
 ## 数据与无侵入
 
 - 全部状态: `~/.xpier/`(sites.json、proxies.json、nginx 配置、证书、日志、应用进程状态)
-- 项目内只读:链接、park 目录、apps 配置(`dev.yaml` 可选,`xpier init .` 生成 repo 内 `xpier.yaml` 才需要提交)
+- 项目内只读:链接、park 目录、apps 配置(`dev.yaml` 可选;`xpier init .` 生成隐藏的 `.xpier.yaml` 钉定文件)
 - 迁移过旧目录名(`~/.herdy`/`~/.pier`)? 执行 `xpier refresh` 重生成 nginx 配置
 
 ## 文档

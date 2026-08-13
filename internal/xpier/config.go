@@ -109,8 +109,15 @@ func cmdInit(args []string) error {
 			return err
 		}
 	}
-	if _, err := os.Stat(manifestPath); err == nil && !force {
-		return fmt.Errorf("%s already exists (use --force to overwrite with the template)", manifestPath)
+	legacyPath := filepath.Join(cwd, store.LegacyManifestName)
+	if !force {
+		for _, p := range []string{manifestPath, legacyPath} {
+			if _, err := os.Stat(p); err == nil {
+				return fmt.Errorf("%s already exists (use --force to overwrite with the template)", p)
+			}
+		}
+	} else {
+		os.Remove(legacyPath)
 	}
 	rt := runtime
 	if rt == "" {
@@ -119,8 +126,8 @@ func cmdInit(args []string) error {
 	if err := os.WriteFile(manifestPath, []byte(buildManifestContent(php, rt)), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("created %s (fully annotated template; unused fields stay commented)\n", manifestPath)
-	fmt.Println("manifest is optional: xpier auto-detects runtime and PHP; the manifest only pins them.")
+	fmt.Printf("%s %s %s\n", store.Green("created"), store.Cyan(manifestPath), store.Gray("(fully annotated template; unused fields stay commented)"))
+	fmt.Println(store.Gray("manifest is optional: xpier auto-detects runtime and PHP; the manifest only pins them."))
 	return nil
 }
 
@@ -133,6 +140,7 @@ func cmdInitFresh(args []string) error {
 	}
 	manifestPath, lockPath := store.ResolvePaths(cwd)
 	os.Remove(manifestPath)
+	os.Remove(filepath.Join(cwd, store.LegacyManifestName))
 	os.Remove(lockPath)
 	if err := store.EnsureProjectDir(cwd); err != nil {
 		return err
@@ -140,6 +148,6 @@ func cmdInitFresh(args []string) error {
 	if err := os.WriteFile(manifestPath, []byte(buildManifestContent("", "fpm")), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("recreated %s (annotated defaults; run `xpier init --php 8.2` to re-pin)\n", manifestPath)
+	fmt.Printf("%s %s %s\n", store.Green("recreated"), store.Cyan(manifestPath), store.Gray("(annotated defaults; run `xpier init --php 8.2` to re-pin)"))
 	return nil
 }

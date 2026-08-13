@@ -22,8 +22,12 @@ import (
 )
 
 const (
-	ManifestName = "xpier.yaml"
+	// ManifestName is hidden so a local pin file does not clutter the repo.
+	ManifestName = ".xpier.yaml"
 	LockName     = "xpier.lock"
+	// LegacyManifestName is the pre-0.0.62 local name; still detected so
+	// existing projects keep working.
+	LegacyManifestName = "xpier.yaml"
 )
 
 // --- types ---
@@ -219,9 +223,11 @@ func ProjectPaths(dir string) (string, string) {
 }
 
 func ResolvePaths(dir string) (string, string) {
-	localManifest := filepath.Join(dir, ManifestName)
-	if _, err := os.Stat(localManifest); err == nil {
-		return localManifest, filepath.Join(dir, LockName)
+	for _, name := range []string{ManifestName, LegacyManifestName} {
+		localManifest := filepath.Join(dir, name)
+		if _, err := os.Stat(localManifest); err == nil {
+			return localManifest, filepath.Join(dir, LockName)
+		}
 	}
 	return ProjectPaths(dir)
 }
