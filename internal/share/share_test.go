@@ -252,11 +252,11 @@ func TestServeoDedicatedKey(t *testing.T) {
 	_ = sshDir
 	home, _ := os.UserHomeDir()
 	os.MkdirAll(filepath.Join(home, ".ssh"), 0o700)
-	if out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-f", filepath.Join(home, ".ssh", "id_serveo"), "-N", "", "-q").CombinedOutput(); err != nil {
+	if out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-f", filepath.Join(home, ".ssh", "id_xpier"), "-N", "", "-q").CombinedOutput(); err != nil {
 		t.Skipf("ssh-keygen failed: %v %s", err, out)
 	}
-	priv, pub := serveoKeyFiles()
-	if priv == "" || !strings.HasSuffix(pub, "id_serveo.pub") {
+	priv, pub := xpierKeyFiles()
+	if priv == "" || !strings.HasSuffix(pub, "id_xpier.pub") {
 		t.Fatalf("serveoKeyFiles = %q %q", priv, pub)
 	}
 	link = serveoRegisterURL()
