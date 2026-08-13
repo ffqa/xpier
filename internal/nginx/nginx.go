@@ -159,10 +159,12 @@ func WriteSiteNginxConfigWithNames(sites *store.Sites, name string, extra []stri
 
 	var conf strings.Builder
 	conf.WriteString("server {\n")
-	conf.WriteString("    listen 80;\n")
+	// Loopback-only: .test resolves to 127.0.0.1, and this keeps 80/443 free
+	// on other interfaces for tools like Tailscale funnel.
+	conf.WriteString("    listen 127.0.0.1:80;\n")
 	httpsOn := site.Secure == nil || *site.Secure
 	if httpsOn {
-		conf.WriteString("    listen 443 ssl;\n")
+		conf.WriteString("    listen 127.0.0.1:443 ssl;\n")
 	}
 	fmt.Fprintf(&conf, "    server_name %s;\n", serverNames)
 	if httpsOn {
@@ -228,8 +230,8 @@ func CurrentTLD() string {
 func WriteDefaultSiteConfig() error {
 	cert, certKey := CertPaths(CurrentTLD())
 	conf := fmt.Sprintf(`server {
-    listen 80 default_server;
-    listen 443 ssl default_server;
+    listen 127.0.0.1:80 default_server;
+    listen 127.0.0.1:443 ssl default_server;
     server_name _;
     ssl_certificate     %s;
     ssl_certificate_key %s;

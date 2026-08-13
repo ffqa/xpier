@@ -24,8 +24,8 @@ func writeProxyConf(domain, upstream string) error {
 	}
 	cert, certKey := nginx.CertPaths(nginx.CurrentTLD())
 	conf := fmt.Sprintf(`server {
-    listen 80;
-    listen 443 ssl;
+    listen 127.0.0.1:80;
+    listen 127.0.0.1:443 ssl;
     server_name %s;
     ssl_certificate     %s;
     ssl_certificate_key %s;
