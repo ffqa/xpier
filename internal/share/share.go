@@ -71,7 +71,10 @@ func CloudflaredBin() string {
 }
 
 var trycloudflareRe = regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
-var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.(lhost\.run|lhr\.life)`)
+
+// localhost.run's ssh endpoint now lands on Serveo's infrastructure, so
+// both backends share Serveo's URL formats and registration flow.
+var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.(lhr\.life|serveousercontent\.com)`)
 var serveoRe = regexp.MustCompile(`https://[a-z0-9-]+\.(serveo\.net|serveousercontent\.com)`)
 var fwdLineRe = regexp.MustCompile(`Forwarding HTTP traffic from (https://\S+)`)
 
@@ -156,11 +159,7 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 	// custom subdomains) and a random one assigned instead.
 	constructed := ""
 	if subdomain != "" {
-		base := "lhost.run"
-		if backend == "serveo" {
-			base = "serveo.net"
-		}
-		constructed = "https://" + subdomain + "." + base
+		constructed = "https://" + subdomain + ".serveo.net"
 	}
 	tunnelURL := ""
 	warnedReg := false
@@ -372,8 +371,8 @@ func CmdShare(args []string) error {
 		fmt.Printf("already sharing: %s (pid %d)\n", st.URL, st.PID)
 		return nil
 	}
-	if *backend == "serveo" && *domain != "" {
-		fmt.Printf("[notice] serveo 自定义子域名需一次性注册 SSH key,注册地址:\n  %s\n(Google/GitHub 登录;未注册将改用随机域名)\n", store.Green(serveoRegisterURL()))
+	if (*backend == "serveo" || *backend == "localhost-run") && *domain != "" {
+		fmt.Printf("[notice] %s 自定义子域名需一次性注册 SSH key,注册地址:\n  %s\n(Google/GitHub 登录;未注册将改用随机域名)\n", *backend, store.Green(serveoRegisterURL()))
 	}
 	fmt.Printf("starting %s tunnel (waiting for the public URL, ~10-30s)...\n", *backend)
 	switch *backend {
