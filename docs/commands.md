@@ -74,7 +74,7 @@
 | `xpier init [--php 8.2] [--runtime fpm|static|hyperf|swoole|frankenphp] [.]` | 生成 `~/.xpier/projects/<slug>/.xpier.yaml`;`.` 写入仓库内的隐藏文件 `.xpier.yaml`(老 `xpier.yaml` 仍兼容) |
 | `xpier init:fresh` | 丢弃现有钉定,重建默认 manifest |
 | `xpier laravel:update` | 站点内 `composer update laravel/framework --with-all-dependencies` |
-| `xpier sync [--apply]` | 解析钉定(php/扩展/服务);`--apply` 实际执行 brew 并写 `xpier.lock` |
+| `xpier sync [--apply]` | 解析钉定(php/扩展/服务);`--apply` 实际执行 brew 并写 `.xpier.lock` |
 | `xpier doctor` | 体检:PHP 版本、扩展、composer check-platform-reqs |
 | `xpier ini [--php 8.2]` | 打开指定版本的 php.ini |
 | `xpier completion [bash|zsh]` | 输出 shell 补全 |

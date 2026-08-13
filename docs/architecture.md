@@ -33,7 +33,7 @@ store ← nginx ← ca / apps / sites ← service ← share
 |---|---|
 | `sites.json` | 站点注册表:TLD、parked 目录、`name -> {path,php,node,driver}` |
 | `proxies.json` | 反向代理注册表:`domain -> upstream` |
-| `projects/<slug>/` | 每个项目的 `xpier.yaml`(钉定)+ `xpier.lock`(sync 解析结果) |
+| `projects/<slug>/` | 每个项目的 `.xpier.yaml`(钉定)+ `.xpier.lock`(sync 解析结果) |
 | `nginx/` | nginx.conf、conf.d/*.conf(站点、代理、00-default) |
 | `dnsmasq/dnsmasq.conf` | `address=/.test/127.0.0.1` 通配解析 |
 | `fpm/` | 每个 PHP 版本的 php-fpm 配置 |

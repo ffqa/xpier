@@ -157,6 +157,8 @@ func writeLock(m *store.Manifest, lockPath string) error {
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		return err
 	}
+	// Drop the pre-0.0.68 xpier.lock name (hidden .xpier.lock is canonical).
+	os.Remove(filepath.Join(filepath.Dir(lockPath), store.LegacyLockName))
 	bin := phpBinFor(m.PHP)
 	ver := phpVersion(bin)
 	path := bin

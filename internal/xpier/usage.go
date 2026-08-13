@@ -76,7 +76,7 @@ Configuration:
 
 Environment & Tooling:
   xpier init [--php 8.2] [.]      pin versions in ~/.xpier/projects ([.] = .xpier.yaml in the repo)
-  xpier sync [--apply]                   resolve pins; --apply runs brew and writes xpier.lock
+  xpier sync [--apply]                   resolve pins; --apply runs brew and writes .xpier.lock
   xpier doctor                           check environment + composer check-platform-reqs
   xpier refresh                          regenerate all configs after a home move
   xpier completion [bash|zsh]            shell completion

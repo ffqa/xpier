@@ -24,10 +24,13 @@ import (
 const (
 	// ManifestName is hidden so a local pin file does not clutter the repo.
 	ManifestName = ".xpier.yaml"
-	LockName     = "xpier.lock"
+	LockName     = ".xpier.lock"
 	// LegacyManifestName is the pre-0.0.62 local name; still detected so
 	// existing projects keep working.
 	LegacyManifestName = "xpier.yaml"
+	// LegacyLockName is the pre-0.0.68 lock name; removed on the next
+	// `xpier sync --apply`.
+	LegacyLockName = "xpier.lock"
 )
 
 // --- types ---
