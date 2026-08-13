@@ -125,17 +125,40 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start ssh tunnel: %w", err)
 	}
-	urlRe := lhostRunRe
-	if backend == "serveo" {
-		urlRe = serveoRe
+	// A requested subdomain makes the public URL deterministic; only the
+	// random case needs parsing (and must skip the serveo console link).
+	tunnelURL := ""
+	if subdomain != "" {
+		base := "lhost.run"
+		if backend == "serveo" {
+			base = "serveo.net"
+		}
+		tunnelURL = "https://" + subdomain + "." + base
 	}
 	deadline := time.Now().Add(25 * time.Second)
-	tunnelURL := ""
 	for time.Now().Before(deadline) {
 		data, _ := os.ReadFile(logPath)
-		if m := urlRe.FindString(string(data)); m != "" {
-			tunnelURL = m
-			break
+		content := string(data)
+		if strings.Contains(content, "remote port forwarding failed") {
+			store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
+			return "", fmt.Errorf("%s rejected the subdomain %q (taken?); try another --domain or drop it for a random one", backend, subdomain)
+		}
+		if tunnelURL == "" {
+			var re *regexp.Regexp
+			if backend == "serveo" {
+				re = serveoRe
+			} else {
+				re = lhostRunRe
+			}
+			for _, m := range re.FindAllString(content, -1) {
+				if backend == "serveo" && strings.Contains(m, "console.") {
+					continue
+				}
+				tunnelURL = m
+				break
+			}
+		} else if len(content) > 0 && strings.Contains(content, host) {
+			break // tunnel is up and the host acknowledged
 		}
 		if !store.PidAlive(cmd.Process.Pid) {
 			break
