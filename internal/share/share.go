@@ -343,6 +343,9 @@ func CmdShare(args []string) error {
 		fmt.Printf("already sharing: %s (pid %d)\n", st.URL, st.PID)
 		return nil
 	}
+	if *backend == "serveo" && *domain != "" {
+		fmt.Println("[notice] serveo 自定义子域名需要先注册 SSH key(一次性,console.serveo.net 用 Google/GitHub 登录);未注册将改用随机域名")
+	}
 	fmt.Printf("starting %s tunnel (waiting for the public URL, ~10-30s)...\n", *backend)
 	switch *backend {
 	case "localhost-run", "serveo":
