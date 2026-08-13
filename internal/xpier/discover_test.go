@@ -224,3 +224,18 @@ func TestLegacyCommandsHint(t *testing.T) {
 		}
 	}
 }
+
+func TestBareNamespaceListsGroup(t *testing.T) {
+	homeTemp(t)
+	// Bare php/node are group words AND legacy commands: without args they
+	// must list the group, not print the migration hint.
+	for _, cmd := range []string{"php", "node"} {
+		if err := Run([]string{cmd}); err != nil {
+			t.Errorf("Run(%q) = %v, want group listing", cmd, err)
+		}
+	}
+	// With args they are legacy uses and must hint.
+	if err := Run([]string{"php", "-v"}); err == nil {
+		t.Error("Run(php -v) should hint migration")
+	}
+}

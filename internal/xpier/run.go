@@ -47,7 +47,10 @@ func Run(args []string) error {
 		usage()
 		return ErrUsage
 	}
-	if newName, ok := legacyCommands[args[0]]; ok {
+	// Bare namespace words (php, node, ...) list their group; only arg-ful
+	// uses of legacy command names get the migration hint.
+	_, isGroup := namespaceGroups[args[0]]
+	if newName, ok := legacyCommands[args[0]]; ok && !(len(args) == 1 && isGroup) {
 		fmt.Fprintf(os.Stderr, "%s: 命令已按命名空间规范迁移,请使用 `xpier %s`(不带前缀的是全局指令;项目指令:site:/app:/php:/node:/env:,本机服务:svc:)\n", store.Red("migrated"), newName)
 		return ErrUsage
 	}
