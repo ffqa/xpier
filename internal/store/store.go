@@ -594,7 +594,7 @@ func style(code, s string) string {
 }
 
 func Bold(s string) string   { return style("1", s) }
-func Gray(s string) string   { return style("90", s) }
+func Gray(s string) string   { return style("37", s) }
 func Cyan(s string) string   { return style("36", s) }
 func Green(s string) string  { return style("32", s) }
 func Yellow(s string) string { return style("33", s) }
