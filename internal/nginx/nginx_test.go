@@ -315,7 +315,7 @@ func TestWriteSiteNginxConfigUnsecure(t *testing.T) {
 	if strings.Contains(conf, "443") || strings.Contains(conf, "ssl_certificate") {
 		t.Errorf("unsecure site should have no TLS:\n%s", conf)
 	}
-	if !strings.Contains(conf, "listen 80;") {
+	if !strings.Contains(conf, "listen 127.0.0.1:80;") {
 		t.Errorf("unsecure site missing listen 80:\n%s", conf)
 	}
 	// Default (Secure nil) still has TLS.
