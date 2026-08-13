@@ -78,9 +78,43 @@ var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.(lhr\.life|serveouserco
 var serveoRe = regexp.MustCompile(`https://[a-z0-9-]+\.(serveo\.net|serveousercontent\.com)`)
 var fwdLineRe = regexp.MustCompile(`Forwarding HTTP traffic from (https://\S+)`)
 
-// serveoRegisterURL builds serveo's one-click SSH key registration link
-// from the user's public key fingerprint.
+// serveoKeyFiles returns the dedicated serveo key pair (~/.ssh/id_serveo)
+// when present, so connections and fingerprints never mix with the default
+// ssh key.
+func serveoKeyFiles() (priv, pub string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", ""
+	}
+	priv = filepath.Join(home, ".ssh", "id_serveo")
+	if store.FileExists(priv) {
+		return priv, priv + ".pub"
+	}
+	return "", ""
+}
+
+// fingerprintURL builds serveo's one-click registration link for a pub key.
+func fingerprintURL(pub string) string {
+	out, err := store.RunOut("ssh-keygen", "-lf", pub)
+	if err != nil {
+		return ""
+	}
+	for _, field := range strings.Fields(out) {
+		if strings.HasPrefix(field, "SHA256:") {
+			return "https://console.serveo.net/ssh/keys?add=" + strings.Replace(field, ":", "%3A", 1)
+		}
+	}
+	return ""
+}
+
+// serveoRegisterURL builds serveo's one-click SSH key registration link,
+// preferring the dedicated id_serveo key.
 func serveoRegisterURL() string {
+	if _, pub := serveoKeyFiles(); pub != "" {
+		if link := fingerprintURL(pub); link != "" {
+			return link
+		}
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "https://console.serveo.net/ssh/keys"
@@ -90,14 +124,8 @@ func serveoRegisterURL() string {
 		if !store.FileExists(pub) {
 			continue
 		}
-		out, err := store.RunOut("ssh-keygen", "-lf", pub)
-		if err != nil {
-			continue
-		}
-		for _, field := range strings.Fields(out) {
-			if strings.HasPrefix(field, "SHA256:") {
-				return "https://console.serveo.net/ssh/keys?add=" + strings.Replace(field, ":", "%3A", 1)
-			}
+		if link := fingerprintURL(pub); link != "" {
+			return link
 		}
 	}
 	return "https://console.serveo.net/ssh/keys"
@@ -146,8 +174,12 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 		return "", err
 	}
 	defer logFile.Close()
-	cmd := exec.Command("ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=30",
-		"-R", forward, user+"@"+host)
+	sshArgs := []string{"-o", "StrictHostKeyChecking=accept-new", "-o", "ServerAliveInterval=30"}
+	if priv, _ := serveoKeyFiles(); priv != "" {
+		sshArgs = append(sshArgs, "-i", priv)
+	}
+	sshArgs = append(sshArgs, "-R", forward, user+"@"+host)
+	cmd := exec.Command("ssh", sshArgs...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -372,6 +404,9 @@ func CmdShare(args []string) error {
 		return nil
 	}
 	if (*backend == "serveo" || *backend == "localhost-run") && *domain != "" {
+		if _, pub := serveoKeyFiles(); pub == "" {
+			fmt.Println("[notice] 建议使用专用密钥(不影响默认 ssh key): ssh-keygen -t ed25519 -f ~/.ssh/id_serveo -N ''")
+		}
 		fmt.Printf("[notice] %s 自定义子域名需一次性注册 SSH key,注册地址:\n  %s\n(Google/GitHub 登录;未注册将改用随机域名)\n", *backend, store.Green(serveoRegisterURL()))
 	}
 	fmt.Printf("starting %s tunnel (waiting for the public URL, ~10-30s)...\n", *backend)

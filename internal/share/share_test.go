@@ -235,3 +235,32 @@ func TestSSHForwardSpec(t *testing.T) {
 		}
 	}
 }
+
+func TestServeoDedicatedKey(t *testing.T) {
+	homeTemp(t)
+	// No dedicated key: falls back to base URL.
+	link := serveoRegisterURL()
+	if link == "" || !strings.Contains(link, "console.serveo.net") {
+		t.Errorf("fallback link = %q", link)
+	}
+	// Generate the dedicated key in the temp HOME and check the fingerprint.
+	if _, err := exec.LookPath("ssh-keygen"); err != nil {
+		t.Skip("ssh-keygen not available")
+	}
+	dir := store.XpierHome() // temp HOME
+	sshDir := filepath.Join(dir, "..", ".ssh")
+	_ = sshDir
+	home, _ := os.UserHomeDir()
+	os.MkdirAll(filepath.Join(home, ".ssh"), 0o700)
+	if out, err := exec.Command("ssh-keygen", "-t", "ed25519", "-f", filepath.Join(home, ".ssh", "id_serveo"), "-N", "", "-q").CombinedOutput(); err != nil {
+		t.Skipf("ssh-keygen failed: %v %s", err, out)
+	}
+	priv, pub := serveoKeyFiles()
+	if priv == "" || !strings.HasSuffix(pub, "id_serveo.pub") {
+		t.Fatalf("serveoKeyFiles = %q %q", priv, pub)
+	}
+	link = serveoRegisterURL()
+	if !strings.Contains(link, "add=SHA256%3A") {
+		t.Errorf("dedicated link = %q", link)
+	}
+}
