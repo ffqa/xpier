@@ -31,12 +31,19 @@ runtime: %s                  # 项目类型/运行时(决定 xpier up 怎么处�
 #   - mysql
 #   - redis
 
-# apps:                     # 多应用编排(项目内也可用独立 dev.yaml,见 xpier app:init)
-#   web:
-#     dir: .
-#     cmd: php artisan serve
-#     port: "8000"
-#     domain: web.test      # 可选:生成 nginx 反代
+# apps:                     # 多应用编排(与 dev.yaml 同构,dev.yaml 优先;两种条目可混用)
+#   # 网站型:无 cmd —— up 自动注册站点(相当于 link),nginx+php-fpm 直接服务
+#   blog:
+#     dir: .                # 可选,默认当前目录
+#     domain: blog.test     # 必填:访问域名
+#     secure: true          # 可选:开启 https(默认 http)
+#     php: "8.4"            # 可选:固定 PHP 版本
+#   # 进程型:有 cmd —— up 托管常驻进程(Hyperf/vite...)
+#   php-server:
+#     dir: /path
+#     cmd: php bin/hyperf.php server:watch
+#     ports: ["9501"]
+#     domain: api.test      # 可选:生成 nginx 反代
 #     node: "20"            # 可选:经 nvm 固定 Node
 #     extensions: [swoole]  # 可选:启动前检查扩展
 `
