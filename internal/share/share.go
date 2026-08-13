@@ -72,7 +72,8 @@ func CloudflaredBin() string {
 
 var trycloudflareRe = regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
 var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.(lhost\.run|lhr\.life)`)
-var serveoRe = regexp.MustCompile(`https://[a-z0-9-]+\.serveo\.net`)
+var serveoRe = regexp.MustCompile(`https://[a-z0-9-]+\.(serveo\.net|serveousercontent\.com)`)
+var fwdLineRe = regexp.MustCompile(`Forwarding HTTP traffic from (https://\S+)`)
 
 // sshHostFor returns the ssh target for an ssh-based backend.
 func sshHostFor(backend string) (host, user string, ok bool) {
@@ -125,16 +126,19 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 	if err := cmd.Start(); err != nil {
 		return "", fmt.Errorf("start ssh tunnel: %w", err)
 	}
-	// A requested subdomain makes the public URL deterministic; only the
-	// random case needs parsing (and must skip the serveo console link).
-	tunnelURL := ""
+	// The forwarded URL printed by the host is authoritative: a requested
+	// subdomain may be ignored (serveo requires SSH key registration for
+	// custom subdomains) and a random one assigned instead.
+	constructed := ""
 	if subdomain != "" {
 		base := "lhost.run"
 		if backend == "serveo" {
 			base = "serveo.net"
 		}
-		tunnelURL = "https://" + subdomain + "." + base
+		constructed = "https://" + subdomain + "." + base
 	}
+	tunnelURL := ""
+	warnedReg := false
 	deadline := time.Now().Add(25 * time.Second)
 	for time.Now().Before(deadline) {
 		data, _ := os.ReadFile(logPath)
@@ -143,27 +147,22 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 			store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
 			return "", fmt.Errorf("%s rejected the subdomain %q (taken?); try another --domain or drop it for a random one", backend, subdomain)
 		}
-		if tunnelURL == "" {
-			var re *regexp.Regexp
-			if backend == "serveo" {
-				re = serveoRe
-			} else {
-				re = lhostRunRe
-			}
-			for _, m := range re.FindAllString(content, -1) {
-				if backend == "serveo" && strings.Contains(m, "console.") {
-					continue
-				}
-				tunnelURL = m
-				break
-			}
-		} else if len(content) > 0 && strings.Contains(content, host) {
-			break // tunnel is up and the host acknowledged
+		if !warnedReg && strings.Contains(content, "register your SSH public key") {
+			warnedReg = true
+			fmt.Printf("[warn] %s 自定义子域名需先在 console.serveo.net 注册 SSH key(Google/GitHub 登录);本次使用随机域名\n", backend)
+			constructed = ""
+		}
+		if m := fwdLineRe.FindStringSubmatch(content); len(m) > 1 {
+			tunnelURL = m[1]
+			break
 		}
 		if !store.PidAlive(cmd.Process.Pid) {
 			break
 		}
 		time.Sleep(400 * time.Millisecond)
+	}
+	if tunnelURL == "" && constructed != "" {
+		tunnelURL = constructed
 	}
 	if tunnelURL == "" {
 		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
