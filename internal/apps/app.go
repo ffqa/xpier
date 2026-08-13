@@ -747,7 +747,6 @@ func CmdUp(args []string) error {
 	default:
 		fmt.Printf("stack up (namespace %s). log: `xpier app:log <app>` | restart: `xpier restart <app>` | stop: `xpier down`\n", ns)
 	}
-	_ = cwd
 	return nil
 }
 
@@ -1400,7 +1399,7 @@ const appInitGuide = `接下来会生成一个带注释的 dev.yaml 模板,照�
    - ports  填它监听的端口(没有就不填)
    - php/node 可选,固定运行时版本
    - domain 可选,配了之后自动生成 nginx 反代,浏览器直接访问该域名
-3. 改完运行 xpier up(全起)/ xpier start <app>(单个)/ xpier log <app>(看日志)。
+3. 改完运行 xpier up(全起)/ xpier start <app>(单个)/ xpier app:log <app>(看日志)。
 
 `
 

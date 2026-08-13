@@ -212,14 +212,14 @@ func FpmDown(ver string) error {
 	}
 	store.KillGroup(pid, syscall.SIGTERM)
 	for i := 0; i < 50; i++ {
-		if !store.PidAlive(st.PID) {
+		if !store.PidAlive(pid) {
 			os.Remove(FpmStatePath(ver))
 			fmt.Printf("php-fpm %s stopped\n", ver)
 			return nil
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	store.KillGroup(st.PID, syscall.SIGKILL)
+	store.KillGroup(pid, syscall.SIGKILL)
 	os.Remove(FpmStatePath(ver))
 	fmt.Printf("php-fpm %s stopped (forced)\n", ver)
 	return nil

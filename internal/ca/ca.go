@@ -171,11 +171,9 @@ func CmdSecure(args []string) error {
 		// Resolve the full domain: a linked site name becomes
 		// <name>.<tld>; otherwise append the TLD unless already full.
 		domain := arg
-		linked := false
 		if sites, err := store.LoadSites(); err == nil {
 			if _, ok := sites.Sites[arg]; ok {
 				domain = store.SiteDomain(sites, arg)
-				linked = true
 				// Re-enable https for a site that was `unsecure`d.
 				if site := sites.Sites[arg]; site.Secure != nil && !*site.Secure {
 					site.Secure = nil
@@ -186,7 +184,6 @@ func CmdSecure(args []string) error {
 				domain = arg + "." + sites.TLD
 			}
 		}
-		_ = linked
 		if err := EnsureDomainCert(domain); err != nil {
 			return err
 		}
