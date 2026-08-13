@@ -324,7 +324,7 @@ func TestWriteSiteNginxConfigUnsecure(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ = os.ReadFile(SiteConfPath("larablog"))
-	if !strings.Contains(string(data), "listen 443 ssl;") {
+	if !strings.Contains(string(data), "listen 127.0.0.1:443 ssl;") {
 		t.Error("default site should keep TLS")
 	}
 }
