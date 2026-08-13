@@ -692,7 +692,7 @@ func CmdUp(args []string) error {
 		}
 	}
 	if len(conflicts) > 0 {
-		return fmt.Errorf("namespace %q 已有进程在跑，拒绝重复启动：\n  %s\n请先 `xpier down`，或 `xpier restart <app>` 单独重启",
+		return fmt.Errorf("namespace %q 已有进程在跑，拒绝重复启动：\n  %s\n请先 `xpier app:down`，或 `xpier app:restart <app>` 单独重启",
 			ns, strings.Join(conflicts, "\n  "))
 	}
 	webUp := 0
@@ -742,11 +742,11 @@ func CmdUp(args []string) error {
 	}
 	switch {
 	case webUp > 0 && procApps == 0:
-		fmt.Printf("stack up (namespace %s): %d 个网站已注册,直接访问域名即可(`xpier sites` 查看)\n", ns, webUp)
+		fmt.Printf("stack up (namespace %s): %d 个网站已注册,直接访问域名即可(`xpier site:list` 查看)\n", ns, webUp)
 	case webUp > 0:
-		fmt.Printf("stack up (namespace %s): %d 网站 + %d 进程. 进程日志: `xpier app:log <app>` | 重启: `xpier restart <app>` | 停止: `xpier down`\n", ns, webUp, procApps)
+		fmt.Printf("stack up (namespace %s): %d 网站 + %d 进程. 进程日志: `xpier app:log <app>` | 重启: `xpier app:restart <app>` | 停止: `xpier app:down`\n", ns, webUp, procApps)
 	case procApps > 0:
-		fmt.Printf("stack up (namespace %s). log: `xpier app:log <app>` | restart: `xpier restart <app>` | stop: `xpier down`\n", ns)
+		fmt.Printf("stack up (namespace %s). log: `xpier app:log <app>` | restart: `xpier app:restart <app>` | stop: `xpier app:down`\n", ns)
 	default:
 		fmt.Println("nothing came up; check the warnings above")
 	}
@@ -805,7 +805,7 @@ func CmdDown(args []string) error {
 		}
 	}
 	if webApps > 0 {
-		fmt.Printf("没有进程型应用在跑;%d 个网站型应用仍是站点状态(`xpier sites` 查看,`xpier unlink <名字>` 移除)\n", webApps)
+		fmt.Printf("没有进程型应用在跑;%d 个网站型应用仍是站点状态(`xpier site:list` 查看,`xpier site:unlink <名字>` 移除)\n", webApps)
 	} else {
 		fmt.Println("no apps running")
 	}
@@ -1144,7 +1144,7 @@ func CmdAppLog(args []string) error {
 	}
 	s, err := store.LoadAppState(ns, name)
 	if err != nil {
-		return fmt.Errorf("app %s not running (start with `xpier up`)", name)
+		return fmt.Errorf("app %s not running (start with `xpier app:up`)", name)
 	}
 	path := s.Log
 	if path == "" || !store.FileExists(path) {
@@ -1275,7 +1275,7 @@ func tailAppLogs() error {
 	}
 	sort.Strings(names)
 	if len(names) == 0 {
-		return fmt.Errorf("no apps running (start with `xpier up`)")
+		return fmt.Errorf("no apps running (start with `xpier app:up`)")
 	}
 	fmt.Printf("tailing %d app(s) - Ctrl-C to stop\n", len(names))
 	lineCh := make(chan string, 64)
@@ -1409,7 +1409,7 @@ const appInitGuide = `接下来会生成一个带注释的 dev.yaml 模板,照�
    - ports  填它监听的端口(没有就不填)
    - php/node 可选,固定运行时版本
    - domain 可选,配了之后自动生成 nginx 反代,浏览器直接访问该域名
-3. 改完运行 xpier up(全起)/ xpier start <app>(单个)/ xpier app:log <app>(看日志)。
+3. 改完运行 xpier app:up(全起)/ xpier app:start <app>(单个)/ xpier app:log <app>(看日志)。
 
 `
 

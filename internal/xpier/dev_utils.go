@@ -216,7 +216,7 @@ func cmdNode(args []string) error {
 	}
 	ver := site.Node
 	if ver == "" {
-		return fmt.Errorf("site has no node pin; run `xpier isolate-node <version>`")
+		return fmt.Errorf("site has no node pin; run `xpier node:isolate <version>`")
 	}
 	// nvm is a shell function; run through a login shell. Quote every
 	// passthrough arg so spaces/quotes are not re-parsed by the shell.
@@ -256,7 +256,7 @@ func cmdCompletion(args []string) error {
 	if len(args) > 0 {
 		shell = args[0]
 	}
-	cmds := []string{"init init:fresh laravel:update sync doctor status app app:init app:status up app:up down app:down start app:start restart app:restart log app:log logs app:logs url app:url install refresh link unlink park forget paths sites sites:up sites:down site:php use php:list php:install php:update ext:install which which-php isolate unisolate isolated php composer debug coverage open edit site-information tld loopback links parked secure unsecure secured proxy proxies unproxy db:install db:start db:stop db:create db share shares share:stop fetch-share-url mail:up mail:down mail xdebug debug:start debug:stop tinker directory-listing isolate-node unisolate-node isolated-node node completion services services:stop services:start services:available services:versions services:create service ini"}
+	cmds := []string{"status doctor refresh completion groups install xdebug debug:start debug:stop db share share:list share:stop fetch-share-url mail mail:up mail:down secure unsecure secured proxy proxies unproxy directory-listing env:init env:init:fresh env:sync laravel:update app app:init app:up app:down app:start app:restart app:log app:logs app:url app:status site:link site:unlink site:park site:forget site:paths site:list site:links site:parked site:open site:edit site:info site:tld site:loopback site:isolate site:unisolate site:isolated site:php site:which site:which-php site:up site:down php:use php:list php:install php:update php:ext php:exec php:composer php:debug php:coverage php:tinker php:ini node:isolate node:unisolate node:isolated node:exec svc:status svc:start svc:stop svc:available svc:versions svc:create svc:log svc:logs svc:exec db:install db:start db:stop db:create"}
 	switch shell {
 	case "zsh":
 		fmt.Printf("#compdef xpier\n_xpier() { compadd %s }\ncompdef _xpier xpier\n", cmds)

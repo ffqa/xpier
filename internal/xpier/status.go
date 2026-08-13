@@ -15,6 +15,6 @@ func cmdStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("sites:   %d linked (`xpier sites` for details)\n", len(sites.Sites))
+	fmt.Printf("sites:   %d linked (`xpier site:list` for details)\n", len(sites.Sites))
 	return nil
 }

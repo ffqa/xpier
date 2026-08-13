@@ -14,9 +14,9 @@ const manifestTemplate = `# xpier 项目钉定配置(可选:没有它 xpier 也�
 # 所有字段都可选,不需要的直接删掉或保持注释。字段说明见 docs/architecture.md。
 
 runtime: %s                  # 项目类型/运行时(决定 xpier up 怎么处理):
-#  ┌ fpm        标准 PHP / Laravel —— 无需 up:cd 项目 && xpier link,nginx+php-fpm 直接服务,访问 <目录名>.test
+#  ┌ fpm        标准 PHP / Laravel —— 无需 up:cd 项目 && xpier site:link,nginx+php-fpm 直接服务,访问 <目录名>.test
 #  ├ static     静态站点            —— 同 fpm,link 后 nginx 直接出文件
-#  ├ hyperf     Hyperf 常驻服务     —— 在下方 apps: 写启动命令,xpier up 拉起
+#  ├ hyperf     Hyperf 常驻服务     —— 在下方 apps: 写启动命令,xpier app:up 拉起
 #  ├ swoole     Swoole 常驻服务     —— 同 hyperf
 #  └ frankenphp FrankenPHP          —— 同 hyperf
 # php: "8.4"                # 钉定 PHP 版本(如 "8.2" / "8.4")
@@ -25,7 +25,7 @@ runtime: %s                  # 项目类型/运行时(决定 xpier up 怎么处�
 #   swoole: "^6.0"          # 约束:"*" 任意 / "^6.0" / ">=6.0"
 #   redis: "*"
 #   xdebug: "*"
-#   # 装法:xpier sync --apply 或 xpier ext:install swoole --php 8.4
+#   # 装法:xpier sync --apply 或 xpier php:ext swoole --php 8.4
 
 # services:                 # 依赖的系统服务(sync --apply 会 brew 安装)
 #   - mysql
@@ -155,6 +155,6 @@ func cmdInitFresh(args []string) error {
 	if err := os.WriteFile(manifestPath, []byte(buildManifestContent("", "fpm")), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("%s %s %s\n", store.Green("recreated"), store.Cyan(manifestPath), store.Gray("(annotated defaults; run `xpier init --php 8.2` to re-pin)"))
+	fmt.Printf("%s %s %s\n", store.Green("recreated"), store.Cyan(manifestPath), store.Gray("(annotated defaults; run `xpier env:init --php 8.2` to re-pin)"))
 	return nil
 }

@@ -1,6 +1,7 @@
 package xpier
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -179,14 +180,14 @@ func TestNewCommandsDispatch(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(old)
 	// Safe, read-only or temp-scoped commands must dispatch without error.
-	for _, cmd := range []string{"services:available", "services:versions", "init:fresh", "paths", "which", "php:list"} {
+	for _, cmd := range []string{"svc:available", "svc:versions", "env:init:fresh", "site:paths", "site:which", "php:list"} {
 		if err := Run(strings.Split(cmd, " ")); err != nil {
 			t.Errorf("Run(%q) = %v", cmd, err)
 		}
 	}
 	// which-php requires a linked site; it must fail cleanly here.
-	if err := Run([]string{"which-php"}); err == nil {
-		t.Error("Run(which-php) in an unlinked dir should error")
+	if err := Run([]string{"site:which-php"}); err == nil {
+		t.Error("Run(site:which-php) in an unlinked dir should error")
 	}
 	// init:fresh recreates the manifest in the temp project dir.
 	cwd, _ := os.Getwd()
@@ -208,5 +209,18 @@ func TestAppStatusDispatch(t *testing.T) {
 	}
 	if err := Run([]string{"app:status"}); err == nil {
 		t.Error("Run(app:status) without config should error")
+	}
+}
+
+func TestLegacyCommandsHint(t *testing.T) {
+	homeTemp(t)
+	for _, cmd := range []string{"up", "link", "sites", "use", "services", "isolate-node"} {
+		err := Run([]string{cmd})
+		if err == nil {
+			t.Errorf("Run(%q) should error with a migration hint", cmd)
+		}
+		if err != nil && !errors.Is(err, ErrUsage) {
+			t.Errorf("Run(%q) = %v, want ErrUsage", cmd, err)
+		}
 	}
 }

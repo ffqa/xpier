@@ -44,13 +44,23 @@ var namespaceGroups = map[string][]string{
 		"app:status                  project app stack table",
 	},
 	"site": {
-		"link [name] [--php 8.2]     link current directory as a site (name.test)",
-		"park <dir> [...]            serve every subdirectory of a directory as a site",
-		"unlink [name] / forget      remove a site / forget the current directory",
-		"paths / sites / links / parked   list project paths / sites / links / parked dirs",
-		"open [site] / edit [site]   open site in browser / IDE",
-		"site-information <site>     show site details",
-		"db [db] [--site name]       open built-in Adminer (auto-detects MySQL)",
+		"site:link [name] [--php 8.4]  link current directory as a site (name.test)",
+		"site:park <dir> [...]         serve subdirectories as sites",
+		"site:unlink [name] / site:forget   remove a site / forget current dir",
+		"site:paths / site:list / site:links / site:parked / site:isolated",
+		"site:open [site] / site:edit / site:info <site>",
+		"site:tld [x] / site:loopback [x]",
+		"site:isolate <ver> / site:unisolate / site:php / site:which / site:which-php",
+		"site:up / site:down          start/stop php-fpm for linked sites",
+	},
+	"php": {
+		"php:use [8.4] / php:list / php:install <ver> / php:update [ver]",
+		"php:ext <swoole|xdebug|...> [--php 8.4]",
+		"php:exec / php:composer / php:debug / php:coverage / php:tinker / php:ini",
+	},
+	"node": {
+		"node:isolate <ver> / node:unisolate / node:isolated",
+		"node:exec [--site x] args    run with the site's Node",
 	},
 	"tls": {
 		"secure [domain]             trust CA + sign certs (sudo)",
@@ -58,28 +68,22 @@ var namespaceGroups = map[string][]string{
 		"secured                     list https sites (http-only sites marked)",
 	},
 	"svc": {
-		"install                     one-time sudo setup: daemons, certs, sudoers",
-		"services / services:start|stop   overview / start-stop daemons + site fpm",
-		"service <svc> <act>         per-service control (nginx, dnsmasq, php-fpm)",
-		"sites:up / sites:down       start/stop php-fpm for linked sites",
-		"db:install|start|stop <svc> manage MySQL/MariaDB/Redis/Postgres",
-		"db:create <name> [--db mysql]   create a database",
-		"services:available / services:versions / services:create <svc>",
-		"mail:up / mail:down / mail  Mailpit mail capture",
+		"svc:status / svc:start / svc:stop   overview / daemons + site fpm",
+		"svc:exec <svc> <act>        per-service control (nginx, dnsmasq, php-fpm)",
+		"svc:log <svc> / svc:logs [all]      service logs",
+		"svc:available / svc:versions / svc:create <svc>",
+		"db:install|start|stop <svc> / db:create <name>",
 	},
 	"config": {
-		"tld [x] / loopback [x]      get/set TLD / loopback",
+		"site:tld [x] / site:loopback [x]   get/set TLD / loopback",
 		"directory-listing [on|off]  toggle nginx autoindex",
-		"ini [--php 8.2]             open a PHP version's php.ini",
+		"php:ini [--php 8.4]         open a PHP version's php.ini",
 	},
 	"env": {
-		"init [--php 8.2] [.]         pin versions in ~/.xpier/projects",
-		"init:fresh                  reset project pins",
-		"sync [--apply]              resolve pins; --apply runs brew + writes xpier.lock",
-		"doctor                      check environment + composer check-platform-reqs",
-		"refresh                     regenerate all configs after a home move",
-		"laravel:update              upgrade laravel/framework via composer",
-		"completion [bash|zsh]       shell completion",
+		"env:init [--php 8.4] [.]      pin versions in ~/.xpier/projects",
+		"env:init:fresh                reset project pins",
+		"env:sync [--apply]            resolve pins; --apply runs brew + writes .xpier.lock",
+		"laravel:update                upgrade laravel/framework via composer",
 	},
 }
 
@@ -92,11 +96,11 @@ func cmdNamespace(args []string) error {
 	}
 	if name == "groups" {
 		fmt.Println(store.Bold(store.Cyan("xpier groups:")))
-		for _, g := range []string{"app", "site", "tls", "svc", "config", "env"} {
+		for _, g := range []string{"app", "site", "php", "node", "tls", "svc", "config", "env"} {
 			first := namespaceGroups[g][0]
 			fmt.Printf("  %s %s\n", store.Green(g), store.Gray(first))
 		}
-		fmt.Println("  " + store.Gray("also: php (PHP group), node (Node group), debug/log (Debugging), share (Sharing), proxy (Proxies), db/mail (Services)"))
+		fmt.Println("  " + store.Gray("also: share (Sharing), db/mail (Services), debug:start/stop (Debugging)"))
 		fmt.Println("  " + store.Gray("run `xpier <group>` for a group's commands, `xpier help` for the full manual"))
 		return nil
 	}
@@ -105,14 +109,12 @@ func cmdNamespace(args []string) error {
 	}
 	lines, ok := namespaceGroups[name]
 	if !ok {
-		return fmt.Errorf("unknown namespace %q (app|site|tls|svc|config|env|groups)", name)
+		return fmt.Errorf("unknown namespace %q (app|site|php|node|tls|svc|config|env|groups)", name)
 	}
 	fmt.Printf("%s\n", store.Bold(store.Cyan("xpier "+name+": commands")))
 	for _, l := range lines {
 		fmt.Println(paintUsageLine("  xpier " + l))
 	}
-	if name == "app" {
-		fmt.Println("  " + store.Gray("flat aliases: xpier up/start/down/restart/log/logs/url (no prefix)"))
-	}
+
 	return nil
 }

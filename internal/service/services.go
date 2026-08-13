@@ -350,7 +350,7 @@ func CmdServicesCreate(args []string) error {
 var safeExtNameRe = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 // CmdExtInstall installs a PHP extension for a PHP version via brew
-// (shivammathur/extensions tap, e.g. `xpier ext:install swoole --php 8.4`).
+// (shivammathur/extensions tap, e.g. `xpier php:ext swoole --php 8.4`).
 func CmdExtInstall(args []string) error {
 	fs := flag.NewFlagSet("ext:install", flag.ExitOnError)
 	ver := fs.String("php", nginx.DefaultPhpVersion(), "php version")

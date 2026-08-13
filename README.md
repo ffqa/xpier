@@ -6,19 +6,19 @@ xpier 是 macOS 上的本地 PHP 开发环境管理器(Laravel Herd / Valet 类�
 
 | 领域 | 命令 | 说明 |
 |---|---|---|
-| 多版本 PHP | `xpier use` / `php:list` / `php:install` / `php:update` / `sites:up` | 全局默认切换、列表/安装/升级、自动拉起对应 php-fpm |
-| nginx 站点 | `xpier link`, `xpier park`, `xpier unlink`, `xpier sites` | `name.test` 域名,dnsmasq 通配 DNS,自动生成 server 块 |
-| 常驻运行时编排 | `xpier up / down / start / restart / log / logs / url` | 从 `dev.yaml`/`xpier.yaml` 的 `apps:` 启动多应用(Hyperf watch、vite 等),端口/进程/日志全托管 |
-| 站点工具 | `open / edit / paths / which / which-php / site-information / tld / loopback / links / parked` | 与 Herd 一致的日常命令 |
-| PHP 隔离 | `xpier isolate / unisolate`, `xpier site:php`, `xpier php/composer/debug/coverage` | 按站点固定 PHP 版本,命令代理到站点 PHP |
+| 多版本 PHP | `xpier php:use` / `php:list` / `php:install` / `php:update` / `site:up` | 全局默认切换、列表/安装/升级、自动拉起对应 php-fpm |
+| nginx 站点 | `xpier site:link`, `site:park`, `site:unlink`, `site:list` | `name.test` 域名,dnsmasq 通配 DNS,自动生成 server 块 |
+| 常驻运行时编排 | `xpier app:up / app:down / app:start / app:restart / app:log / app:logs / app:url` | 从 `dev.yaml`/`.xpier.yaml` 的 `apps:` 启动多应用(Hyperf watch、vite 等),端口/进程/日志全托管 |
+| 站点工具 | `site:open / site:edit / site:paths / site:which / site:which-php / site:info / site:tld / site:loopback` | 与 Herd 一致的日常命令 |
+| PHP 隔离 | `xpier site:isolate / site:unisolate`, `site:php`, `php:exec/composer/debug/coverage` | 按站点固定 PHP 版本,命令代理到站点 PHP |
 | 证书 | `sudo xpier secure [domain] / secured` | 本地 CA,签发 `*.test` 通配证书与多级域名证书 |
 | 反向代理 | `xpier proxy <domain> <host> / proxies / unproxy` | 代理到任意本地服务(meilisearch、docker 等) |
-| 数据库 | `db:install/start/stop`, `services:available/versions/create`, `db:create`, `db` | MySQL/MariaDB/Redis/Postgres + 内置 Adminer(空密码补丁、自动探测、随机域名) |
-| 隧道 | `xpier share [site\|--port N]`, `shares`, `share:stop` | cloudflared 快速隧道,自动探测 HTTP/HTTPS 源 |
+| 数据库 | `db:install/start/stop`, `svc:available/versions/create`, `db:create`, `db` | MySQL/MariaDB/Redis/Postgres + 内置 Adminer(空密码补丁、自动探测、随机域名) |
+| 隧道 | `xpier share [site\|--port N]`, `share:list`, `share:stop` | cloudflared 快速隧道,自动探测 HTTP/HTTPS 源 |
 | 邮件 | `xpier mail:up / mail:down / mail` | Mailpit(SMTP 1025, UI 8025) |
-| 调试 | `xdebug [status\|on\|off]`, `debug:start / debug:stop`, `tinker` | xdebug 开关(+fpm 立即重启)、tinker 自动识别 |
-| Node 隔离 | `xpier isolate-node <ver> / node` | 按站点固定 Node 版本(经 nvm) |
-| 环境 | `init / init:fresh / sync / doctor / status / services / service / ini / laravel:update` | 版本钉定、依赖解析、体检、服务控制、Laravel 升级 |
+| 调试 | `xdebug [status\|on\|off]`, `debug:start / debug:stop`, `php:tinker` | xdebug 开关(+fpm 立即重启)、tinker 自动识别 |
+| Node 隔离 | `xpier node:isolate <ver> / node:exec` | 按站点固定 Node 版本(经 nvm) |
+| 环境 | `env:init / env:init:fresh / env:sync / doctor / status / svc:status / svc:exec / php:ini / laravel:update` | 版本钉定、依赖解析、体检、服务控制、Laravel 升级 |
 
 ## 安装
 

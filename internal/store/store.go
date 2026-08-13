@@ -29,7 +29,7 @@ const (
 	// existing projects keep working.
 	LegacyManifestName = "xpier.yaml"
 	// LegacyLockName is the pre-0.0.68 lock name; removed on the next
-	// `xpier sync --apply`.
+	// `xpier env:sync --apply`.
 	LegacyLockName = "xpier.lock"
 )
 

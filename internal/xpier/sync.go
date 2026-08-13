@@ -39,7 +39,7 @@ func cmdSync(args []string) error {
 	manifestPath, lockPath := store.ResolvePaths(cwd)
 	m, err := store.LoadManifest(manifestPath)
 	if err != nil {
-		return fmt.Errorf("load %s: %w (create one with `xpier init --php 8.2`)", manifestPath, err)
+		return fmt.Errorf("load %s: %w (create one with `xpier env:init --php 8.2`)", manifestPath, err)
 	}
 	items := plan(m)
 	pending := 0

@@ -157,7 +157,7 @@ func CmdLink(args []string) error {
 	}
 	if store.IsTTY(os.Stdout) {
 		if err := service.FpmUp(phpVer); err != nil {
-			fmt.Printf("[warn] php-fpm %s: %v (run `xpier sites:up` later)\n", phpVer, err)
+			fmt.Printf("[warn] php-fpm %s: %v (run `xpier site:up` later)\n", phpVer, err)
 		}
 	}
 	fmt.Printf("linked %s -> %s (driver %s, php %s)\n", store.SiteDomain(sites, siteName), cwd, site.Driver, site.PHP)

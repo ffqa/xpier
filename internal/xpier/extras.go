@@ -134,7 +134,7 @@ func cmdXdebug(args []string) error {
 	case fs.Arg(0) == "on":
 		ext := filepath.Join(store.BrewPrefix(), "opt", "php@"+*ver, "lib", "php", "extensions", "no-debug-non-zts-*", "xdebug.so")
 		if matches, _ := filepath.Glob(ext); len(matches) == 0 {
-			return fmt.Errorf("xdebug extension not installed for php@%s (run `xpier sync --apply` or brew install shivammathur/extensions/xdebug@%s)", *ver, *ver)
+			return fmt.Errorf("xdebug extension not installed for php@%s (run `xpier env:sync --apply` or brew install shivammathur/extensions/xdebug@%s)", *ver, *ver)
 		}
 		content := "zend_extension=\"xdebug.so\"\nxdebug.mode=debug\nxdebug.start_with_request=yes\n"
 		if err := os.MkdirAll(filepath.Dir(conf), 0o755); err != nil {
