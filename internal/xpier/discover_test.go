@@ -195,3 +195,18 @@ func TestNewCommandsDispatch(t *testing.T) {
 		t.Error("init:fresh should recreate the manifest")
 	}
 }
+
+func TestAppStatusDispatch(t *testing.T) {
+	homeTemp(t)
+	chdir := t.TempDir()
+	old, _ := os.Getwd()
+	os.Chdir(chdir)
+	defer os.Chdir(old)
+	// app:status needs a project config; bare status is global and works anywhere.
+	if err := Run([]string{"status"}); err != nil {
+		t.Errorf("Run(status) = %v", err)
+	}
+	if err := Run([]string{"app:status"}); err == nil {
+		t.Error("Run(app:status) without config should error")
+	}
+}

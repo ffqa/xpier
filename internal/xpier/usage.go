@@ -15,7 +15,7 @@ Apps (multi-project orchestration, from dev.yaml / xpier.yaml apps):
   xpier start <app> / app:start [--force]   start one app
   xpier down / app:down                  stop all apps and clean nginx mappings
   xpier restart <app> / app:restart [--force]   kill + start one app
-  xpier status                           pins, lock, and app stack table
+  xpier app:status                      project app stack table
   xpier app:log <app> [-f] / app:logs   project app log / all project app logs
   xpier log <svc> [-f]                  one service log (nginx, dnsmasq, php-fpm, mailpit)
   xpier logs [all]                      service logs (global; all = + project app logs)
@@ -76,6 +76,7 @@ Configuration:
 
 Environment & Tooling:
   xpier init [--php 8.2] [.]      pin versions in ~/.xpier/projects ([.] = .xpier.yaml in the repo)
+  xpier status                          global overview: services + linked sites
   xpier sync [--apply]                   resolve pins; --apply runs brew and writes .xpier.lock
   xpier doctor                           check environment + composer check-platform-reqs
   xpier refresh                          regenerate all configs after a home move

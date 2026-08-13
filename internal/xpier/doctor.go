@@ -26,6 +26,14 @@ func cmdDoctor(args []string) error {
 	if hasManifest {
 		expectPHP = m.PHP
 		extConstraints = m.Extensions
+		fmt.Printf("pins: php %s, runtime %s", m.PHP, m.Runtime)
+		for _, ext := range store.SortedKeys(m.Extensions) {
+			fmt.Printf(", %s %s", ext, m.Extensions[ext])
+		}
+		fmt.Println()
+		if lockErr == nil {
+			fmt.Printf("lock: php %s @ %s\n", lock.PHP.Version, lock.PHP.Path)
+		}
 	} else {
 		fmt.Println("[info] no manifest; checking auto-detected environment (create one with `xpier init --php 8.2` to pin versions)")
 	}

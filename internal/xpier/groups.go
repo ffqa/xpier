@@ -41,7 +41,7 @@ var namespaceGroups = map[string][]string{
 		"app:log <app> [-f]          one app log",
 		"app:logs                    all app logs together",
 		"app:url [app]               show app URLs",
-		"status                      pins, lock, and app stack table",
+		"app:status                  project app stack table",
 	},
 	"site": {
 		"link [name] [--php 8.2]     link current directory as a site (name.test)",
