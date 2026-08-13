@@ -81,7 +81,7 @@ func TestFpmStateRoundTripAndRunning(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 not available for marker test")
 	}
-	marker := "-y " + FpmConfPath(ver)
+	marker := FpmConfPath(ver)
 	child := exec.Command("python3", "-c", "import time;time.sleep(300)", marker)
 	if err := child.Start(); err != nil {
 		t.Fatal(err)
@@ -101,6 +101,9 @@ func TestFpmStateRoundTripAndRunning(t *testing.T) {
 	if !FpmRunning(ver) {
 		t.Error("FpmRunning should be true for a live pid with the fpm marker")
 	}
+	// Remove the marker child so the dead-pid case cannot match it.
+	child.Process.Kill()
+	child.Wait()
 	// Dead pid -> false.
 	st.PID = 999999
 	data, err = json.Marshal(st)

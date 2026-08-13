@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"xpier/internal/store"
@@ -16,6 +18,18 @@ type FpmState struct {
 	PID     int    `json:"pid"`
 	LogPath string `json:"log_path"`
 	Sock    string `json:"sock"`
+}
+
+func writeFpmState(ver string, pid int) error {
+	st := &FpmState{Version: ver, PID: pid, LogPath: filepath.Join(store.XpierHome(), "logs", "php-fpm-"+ver+".log"), Sock: FpmSockPath(ver)}
+	data, err := json.Marshal(st)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(FpmStatePath(ver)), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(FpmStatePath(ver), data, 0o644)
 }
 
 func FpmStatePath(ver string) string {
@@ -46,14 +60,45 @@ func LoadFpmState(ver string) (*FpmState, error) {
 	return &st, nil
 }
 
-func FpmRunning(ver string) bool {
-	st, err := LoadFpmState(ver)
+// fpmMarker is the argv fragment a live php-fpm master shows. The master
+// rewrites its argv to "php-fpm: master process (<conf>)" (no -y flag), so
+// the conf path itself is the reliable marker.
+func fpmMarker(ver string) string { return FpmConfPath(ver) }
+
+// findFpmMaster returns a live php-fpm master using our conf, even when the
+// state file is stale.
+func findFpmMaster(ver string) int {
+	out, err := store.RunOut("pgrep", "-f", FpmConfPath(ver))
 	if err != nil {
-		return false
+		return 0
 	}
-	// A recycled PID must not look like a running php-fpm, or FpmUp would
-	// skip starting and leave the site on a dead socket.
-	return store.ProcAlive(st.PID, "-y "+FpmConfPath(ver))
+	for _, line := range strings.Split(out, "\n") {
+		if pid, err := strconv.Atoi(strings.TrimSpace(line)); err == nil && pid > 0 && store.ProcAlive(pid, fpmMarker(ver)) {
+			return pid
+		}
+	}
+	return 0
+}
+
+// socketHolder returns a live pid holding the fpm unix socket, or 0.
+func socketHolder(ver string) int {
+	out, err := store.RunOut("lsof", "-t", FpmSockPath(ver))
+	if err != nil {
+		return 0
+	}
+	if pid, err := strconv.Atoi(strings.TrimSpace(out)); err == nil && pid > 0 && store.PidAlive(pid) {
+		return pid
+	}
+	return 0
+}
+
+func FpmRunning(ver string) bool {
+	if st, err := LoadFpmState(ver); err == nil {
+		if store.ProcAlive(st.PID, fpmMarker(ver)) {
+			return true
+		}
+	}
+	return findFpmMaster(ver) > 0 || socketHolder(ver) > 0
 }
 
 func WriteFpmConf(ver string) error {
@@ -92,6 +137,19 @@ func FpmUp(ver string) error {
 	if FpmRunning(ver) {
 		return nil
 	}
+	// A live master or socket holder (e.g. from a stale state file or a
+	// pre-rename home) is still a working php-fpm: adopt it instead of
+	// starting a second one that dies on the busy socket.
+	if adopt := findFpmMaster(ver); adopt > 0 {
+		writeFpmState(ver, adopt)
+		fmt.Printf("php-fpm %s already running (pid %d, adopted stale state)\n", ver, adopt)
+		return nil
+	}
+	if adopt := socketHolder(ver); adopt > 0 {
+		writeFpmState(ver, adopt)
+		fmt.Printf("php-fpm %s already running (pid %d holds the socket; consider `xpier service php-fpm-%s restart` to pick up current config)\n", ver, adopt, ver)
+		return nil
+	}
 	bin := FpmBinFor(ver)
 	if !store.FileExists(bin) {
 		return fmt.Errorf("php-fpm for %s not found at %s (run `brew install shivammathur/php/php@%s`)", ver, bin, ver)
@@ -115,15 +173,7 @@ func FpmUp(ver string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start php-fpm %s: %w", ver, err)
 	}
-	st := &FpmState{Version: ver, PID: cmd.Process.Pid, LogPath: logPath, Sock: FpmSockPath(ver)}
-	data, err := json.Marshal(st)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(FpmStatePath(ver)), 0o755); err != nil {
-		return err
-	}
-	if err := os.WriteFile(FpmStatePath(ver), data, 0o644); err != nil {
+	if err := writeFpmState(ver, cmd.Process.Pid); err != nil {
 		return err
 	}
 	// Wait for the unix socket to appear.
@@ -147,12 +197,20 @@ func FpmDown(ver string) error {
 	}
 	// Guard with a cmdline marker: a PID recycled after reboot must not be
 	// killed just because the state file still mentions it.
-	if !store.ProcAlive(st.PID, "-y "+FpmConfPath(ver)) {
+	pid := st.PID
+	if !store.ProcAlive(pid, fpmMarker(ver)) {
+		if m := findFpmMaster(ver); m > 0 {
+			pid = m
+		} else if h := socketHolder(ver); h > 0 {
+			pid = h
+		}
+	}
+	if !store.ProcAlive(pid, fpmMarker(ver)) && pid == st.PID {
 		os.Remove(FpmStatePath(ver))
 		fmt.Printf("php-fpm %s state was stale (pid %d not ours), removed\n", ver, st.PID)
 		return nil
 	}
-	store.KillGroup(st.PID, syscall.SIGTERM)
+	store.KillGroup(pid, syscall.SIGTERM)
 	for i := 0; i < 50; i++ {
 		if !store.PidAlive(st.PID) {
 			os.Remove(FpmStatePath(ver))
