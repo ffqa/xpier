@@ -75,6 +75,31 @@ var lhostRunRe = regexp.MustCompile(`https://[a-z0-9-]+\.(lhost\.run|lhr\.life)`
 var serveoRe = regexp.MustCompile(`https://[a-z0-9-]+\.(serveo\.net|serveousercontent\.com)`)
 var fwdLineRe = regexp.MustCompile(`Forwarding HTTP traffic from (https://\S+)`)
 
+// serveoRegisterURL builds serveo's one-click SSH key registration link
+// from the user's public key fingerprint.
+func serveoRegisterURL() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "https://console.serveo.net/ssh/keys"
+	}
+	for _, name := range []string{"id_ed25519.pub", "id_rsa.pub", "id_ecdsa.pub"} {
+		pub := filepath.Join(home, ".ssh", name)
+		if !store.FileExists(pub) {
+			continue
+		}
+		out, err := store.RunOut("ssh-keygen", "-lf", pub)
+		if err != nil {
+			continue
+		}
+		for _, field := range strings.Fields(out) {
+			if strings.HasPrefix(field, "SHA256:") {
+				return "https://console.serveo.net/ssh/keys?add=" + strings.Replace(field, ":", "%3A", 1)
+			}
+		}
+	}
+	return "https://console.serveo.net/ssh/keys"
+}
+
 // sshHostFor returns the ssh target for an ssh-based backend.
 func sshHostFor(backend string) (host, user string, ok bool) {
 	switch backend {
@@ -149,7 +174,11 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 		}
 		if !warnedReg && strings.Contains(content, "register your SSH public key") {
 			warnedReg = true
-			fmt.Printf("[warn] %s 自定义子域名需先在 console.serveo.net 注册 SSH key(Google/GitHub 登录);本次使用随机域名\n", backend)
+			link := "https://console.serveo.net/ssh/keys"
+			if m := regexp.MustCompile(`https://console\.serveo\.net/ssh/keys\?add=\S+`).FindString(content); m != "" {
+				link = m
+			}
+			fmt.Printf("[warn] %s 自定义子域名未生效(需先注册 SSH key),注册地址: %s;本次使用随机域名\n", backend, link)
 			constructed = ""
 		}
 		if m := fwdLineRe.FindStringSubmatch(content); len(m) > 1 {
@@ -344,7 +373,7 @@ func CmdShare(args []string) error {
 		return nil
 	}
 	if *backend == "serveo" && *domain != "" {
-		fmt.Println("[notice] serveo 自定义子域名需要先注册 SSH key(一次性,console.serveo.net 用 Google/GitHub 登录);未注册将改用随机域名")
+		fmt.Printf("[notice] serveo 自定义子域名需一次性注册 SSH key,注册地址:\n  %s\n(Google/GitHub 登录;未注册将改用随机域名)\n", store.Green(serveoRegisterURL()))
 	}
 	fmt.Printf("starting %s tunnel (waiting for the public URL, ~10-30s)...\n", *backend)
 	switch *backend {
