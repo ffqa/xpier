@@ -240,8 +240,12 @@ func CmdShare(args []string) error {
 	port := fs.String("port", "", "share an existing local port (no site needed)")
 	https := fs.Bool("https", false, "origin uses HTTPS (e.g. vite basic-ssl dev server)")
 	domain := fs.String("domain", "", "stable subdomain for localhost-run backend (e.g. myapp -> https://myapp.lhost.run)")
+	localhost := fs.Bool("localhost", false, "shorthand for --backend localhost-run (no account needed)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *localhost {
+		*backend = "localhost-run"
 	}
 	siteName := fs.Arg(0)
 	key := siteName
