@@ -731,7 +731,22 @@ func CmdUp(args []string) error {
 		}
 		nginx.NginxReload()
 	}
-	fmt.Printf("stack up (namespace %s). log: `xpier log <app>` | restart: `xpier restart <app>` | stop: `xpier down`\n", ns)
+	webApps, procApps := 0, 0
+	for _, app := range cfg.Apps {
+		if app.Cmd == "" {
+			webApps++
+		} else {
+			procApps++
+		}
+	}
+	switch {
+	case webApps > 0 && procApps == 0:
+		fmt.Printf("stack up (namespace %s): %d 个网站已注册,直接访问域名即可(`xpier sites` 查看)\n", ns, webApps)
+	case webApps > 0:
+		fmt.Printf("stack up (namespace %s): %d 网站 + %d 进程. 进程日志: `xpier app:log <app>` | 重启: `xpier restart <app>` | 停止: `xpier down`\n", ns, webApps, procApps)
+	default:
+		fmt.Printf("stack up (namespace %s). log: `xpier app:log <app>` | restart: `xpier restart <app>` | stop: `xpier down`\n", ns)
+	}
 	_ = cwd
 	return nil
 }
