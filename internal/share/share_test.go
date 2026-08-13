@@ -221,3 +221,17 @@ func TestAliveMarker(t *testing.T) {
 		t.Errorf("ssh marker = %q", got)
 	}
 }
+
+func TestSSHForwardSpec(t *testing.T) {
+	homeTemp(t)
+	cases := []struct{ target, sub, want string }{
+		{"http://127.0.0.1:3000", "oauth", "oauth:80:localhost:3000"},
+		{"http://127.0.0.1:3000", "", ":80:localhost:3000"},
+		{"https://127.0.0.1:5173", "oauth", "oauth:443:localhost:5173"},
+	}
+	for _, c := range cases {
+		if got := sshForwardSpec(c.target, c.sub); got != c.want {
+			t.Errorf("sshForwardSpec(%q,%q) = %q, want %q", c.target, c.sub, got, c.want)
+		}
+	}
+}
