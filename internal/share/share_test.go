@@ -25,7 +25,7 @@ func TestShareStateRoundTrip(t *testing.T) {
 	if _, err := LoadShareState(key); err == nil {
 		t.Error("LoadShareState missing should error")
 	}
-	st := &ShareState{Site: key, PID: 123, URL: "https://abc.trycloudflare.com", Target: "http://127.0.0.1:80", Log: "/tmp/l"}
+	st := &ShareState{Site: key, PID: 123, URL: "https://abc.trycloudflare.com", Target: "http://localhost:80", Log: "/tmp/l"}
 	if err := SaveShareState(st); err != nil {
 		t.Fatal(err)
 	}
@@ -68,13 +68,13 @@ func TestProbeURLAndDetectOriginProto(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code := probeURL("http://127.0.0.1:" + portStr); code != "200" {
+	if code := probeURL("http://localhost:" + portStr); code != "200" {
 		t.Errorf("probeURL = %q, want 200", code)
 	}
 	if proto := detectOriginProto(portStr); proto != "http" {
 		t.Errorf("detectOriginProto = %q, want http", proto)
 	}
-	if code := probeURL("http://127.0.0.1:1"); code != "" {
+	if code := probeURL("http://localhost:1"); code != "" {
 		t.Errorf("probeURL closed port = %q, want empty", code)
 	}
 }
@@ -96,7 +96,7 @@ func TestCmdShareStopEmpty(t *testing.T) {
 func TestCmdShareStaleStateStop(t *testing.T) {
 	homeTemp(t)
 	// A stale state file with a dead pid: stop should clean it up.
-	st := &ShareState{Site: "ghost", PID: 999999, URL: "https://ghost.trycloudflare.com", Target: "http://127.0.0.1:80"}
+	st := &ShareState{Site: "ghost", PID: 999999, URL: "https://ghost.trycloudflare.com", Target: "http://localhost:80"}
 	if err := SaveShareState(st); err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestVerifyPublicURL(t *testing.T) {
 	}))
 	defer srv.Close()
 	_, port, _ := splitHostPort(srv.Listener.Addr().String())
-	if code := verifyPublicURL("http://127.0.0.1:" + port); code != "201" {
+	if code := verifyPublicURL("http://localhost:" + port); code != "201" {
 		t.Errorf("verifyPublicURL = %q, want 201", code)
 	}
 }
@@ -195,7 +195,7 @@ func TestCmdShareAlreadySharing(t *testing.T) {
 
 func TestCmdShareStopLiveButNotOurs(t *testing.T) {
 	homeTemp(t)
-	st := &ShareState{Site: "ghost", PID: os.Getpid(), URL: "https://ghost.trycloudflare.com", Target: "http://127.0.0.1:80"}
+	st := &ShareState{Site: "ghost", PID: os.Getpid(), URL: "https://ghost.trycloudflare.com", Target: "http://localhost:80"}
 	if err := SaveShareState(st); err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +212,8 @@ func TestCmdShareStopLiveButNotOurs(t *testing.T) {
 
 func TestAliveMarker(t *testing.T) {
 	homeTemp(t)
-	cf := &ShareState{Target: "http://127.0.0.1:80"}
-	if got := aliveMarker(cf); got != "--url http://127.0.0.1:80" {
+	cf := &ShareState{Target: "http://localhost:80"}
+	if got := aliveMarker(cf); got != "--url http://localhost:80" {
 		t.Errorf("cloudflared marker = %q", got)
 	}
 	ssh := &ShareState{Kind: "localhost-run"}
@@ -225,8 +225,8 @@ func TestAliveMarker(t *testing.T) {
 func TestSSHForwardSpec(t *testing.T) {
 	homeTemp(t)
 	cases := []struct{ target, sub, want string }{
-		{"http://127.0.0.1:3000", "oauth", "oauth:80:localhost:3000"},
-		{"http://127.0.0.1:3000", "", ":80:localhost:3000"},
+		{"http://localhost:3000", "oauth", "oauth:80:localhost:3000"},
+		{"http://localhost:3000", "", ":80:localhost:3000"},
 		{"https://127.0.0.1:5173", "oauth", "oauth:443:localhost:5173"},
 	}
 	for _, c := range cases {

@@ -135,13 +135,13 @@ func TestAppURL(t *testing.T) {
 	if got := appURL(store.App{Domain: "abc.test"}, nil); got != "http://abc.test/" {
 		t.Errorf("appURL domain = %q", got)
 	}
-	if got := appURL(store.App{Port: "5173"}, nil); got != "http://127.0.0.1:5173/" {
+	if got := appURL(store.App{Port: "5173"}, nil); got != "http://localhost:5173/" {
 		t.Errorf("appURL port = %q", got)
 	}
-	if got := appURL(store.App{Ports: []string{"5173"}}, nil); got != "http://127.0.0.1:5173/" {
+	if got := appURL(store.App{Ports: []string{"5173"}}, nil); got != "http://localhost:5173/" {
 		t.Errorf("appURL ports = %q", got)
 	}
-	if got := appURL(store.App{}, &store.AppState{Port: "9000"}); got != "http://127.0.0.1:9000/" {
+	if got := appURL(store.App{}, &store.AppState{Port: "9000"}); got != "http://localhost:9000/" {
 		t.Errorf("appURL state = %q", got)
 	}
 	if got := appURL(store.App{}, nil); got != "-" {
@@ -289,7 +289,7 @@ func TestWriteAppNginxConfPorts(t *testing.T) {
 		t.Fatal(err)
 	}
 	conf := string(data)
-	if !strings.Contains(conf, "proxy_pass http://127.0.0.1:8080;") {
+	if !strings.Contains(conf, "proxy_pass http://localhost:8080;") {
 		t.Errorf("ports[0] not used:\n%s", conf)
 	}
 	if !strings.Contains(conf, "server_name foo.test;") {
@@ -333,7 +333,7 @@ func TestWriteAppNginxConfPrefersStatePort(t *testing.T) {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(appNginxConfPath("ns", "web"))
-	if !strings.Contains(string(data), "proxy_pass http://127.0.0.1:5174;") {
+	if !strings.Contains(string(data), "proxy_pass http://localhost:5174;") {
 		t.Errorf("state port not used:\n%s", data)
 	}
 }

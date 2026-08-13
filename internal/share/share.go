@@ -355,10 +355,10 @@ func probeURL(u string) string {
 // detectOriginProto probes whether a local port serves HTTP or HTTPS
 // (e.g. vite with basic-ssl is HTTPS-only).
 func detectOriginProto(port string) string {
-	if code := probeURL("http://127.0.0.1:" + port); code != "" && code != "000" {
+	if code := probeURL("http://localhost:" + port); code != "" && code != "000" {
 		return "http"
 	}
-	if code := probeURL("https://127.0.0.1:" + port); code != "" && code != "000" {
+	if code := probeURL("https://localhost:" + port); code != "" && code != "000" {
 		return "https"
 	}
 	return "http"

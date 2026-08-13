@@ -247,7 +247,7 @@ func writeAppNginxConf(ns, name string, app store.App) error {
     ssl_certificate     %s;
     ssl_certificate_key %s;
     location / {
-        proxy_pass http://127.0.0.1:%s;
+        proxy_pass http://localhost:%s;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -353,7 +353,7 @@ func appURL(app store.App, s *store.AppState) string {
 		}
 	}
 	if port != "" {
-		return "http://127.0.0.1:" + port + "/"
+		return "http://localhost:" + port + "/"
 	}
 	return "-"
 }
