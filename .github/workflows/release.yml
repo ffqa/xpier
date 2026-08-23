@@ -1,0 +1,56 @@
+name: release
+
+# Push a tag like v0.0.01 to build macOS arm64/amd64 binaries and publish a GitHub Release:
+#   git tag v0.0.01 && git push origin v0.0.01
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        goarch: [arm64, amd64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build darwin/${{ matrix.goarch }}
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          VERSION="${REF_NAME#v}"
+          CGO_ENABLED=0 GOOS=darwin \
+            go build -ldflags "-X xpier/internal/xpier.Version=${VERSION}" \
+            -o "xpier-${REF_NAME}-darwin-${GOARCH}" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: xpier-${{ github.ref_name }}-darwin-${{ matrix.goarch }}
+          path: xpier-${{ github.ref_name }}-darwin-${{ matrix.goarch }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          find dist -type f -name 'xpier-*' -exec chmod +x {} \;
+          gh release create "${GITHUB_REF_NAME}" dist/xpier-*/* \
+            --title "${GITHUB_REF_NAME}" --generate-notes

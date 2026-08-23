@@ -1,6 +1,11 @@
 # xpier
 
+中文 | [English](README.en.md)
+
 xpier 是 macOS 上的本地 PHP 开发环境管理器(Laravel Herd / Valet 类工具),同时支持多项目应用编排(dev.yaml / xpier.yaml `apps:`)。所有状态都存放在 `~/.xpier/`,**绝不写入你的项目代码**。
+
+> **平台说明:**目前仅支持 **macOS**(Apple Silicon 与 Intel 均可)。
+> 暂时**没有 GUI**,xpier 是纯命令行工具,可直接替换 Laravel Herd 的命令行版本使用。
 
 ## 功能一览(对齐 Herd)
 

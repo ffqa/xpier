@@ -1,3 +1,28 @@
+# Binaries
 /xpier
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries & coverage
 *.test
+*.out
+coverage.*
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Dependency directory
+vendor/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
 .DS_Store
+Thumbs.db
