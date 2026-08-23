@@ -10,11 +10,15 @@ jobs:
     # Tests assume a macOS environment (launchd paths, /var symlink, etc.)
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+
+      # cmdDoctor (exercised by tests) needs a php binary on PATH
+      - name: Install PHP
+        run: brew install shivammathur/php/php@8.2
 
       - name: Vet
         run: go vet ./...
