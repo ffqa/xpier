@@ -33,7 +33,7 @@ jobs:
             go build -ldflags "-X xpier/internal/xpier.Version=${VERSION}" \
             -o "xpier-${REF_NAME}-darwin-${GOARCH}" .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: xpier-${{ github.ref_name }}-darwin-${{ matrix.goarch }}
           path: xpier-${{ github.ref_name }}-darwin-${{ matrix.goarch }}
@@ -42,7 +42,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           path: dist
 
