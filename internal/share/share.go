@@ -53,21 +53,18 @@ func LoadShareState(site string) (*ShareState, error) {
 }
 
 func SaveShareState(st *ShareState) error {
-	if err := os.MkdirAll(filepath.Dir(ShareStatePath(st.Site)), 0o755); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(ShareStatePath(st.Site), data, 0o644)
+	return store.WriteFileAtomic(ShareStatePath(st.Site), data, 0o644)
 }
 
 func CloudflaredBin() string {
 	if p := filepath.Join(store.BrewPrefix(), "bin", "cloudflared"); store.FileExists(p) {
 		return p
 	}
-	return "/usr/local/bin/cloudflared"
+	return filepath.Join(store.BrewPrefix(), "bin", "cloudflared")
 }
 
 var trycloudflareRe = regexp.MustCompile(`https://[a-z0-9-]+\.trycloudflare\.com`)
@@ -205,7 +202,9 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 	// subdomain may be ignored (serveo requires SSH key registration for
 	// custom subdomains) and a random one assigned instead.
 	constructed := ""
-	if subdomain != "" {
+	// Only serveo honors a custom subdomain this way; localhost.run always
+	// assigns a random host, so never fabricate a serveo.net URL for it.
+	if subdomain != "" && backend == "serveo" {
 		constructed = "https://" + subdomain + ".serveo.net"
 	}
 	tunnelURL := ""
@@ -245,7 +244,8 @@ func startSSHTunnel(backend, key, target, subdomain string) (string, error) {
 	}
 	st := &ShareState{Site: key, PID: cmd.Process.Pid, URL: tunnelURL, Target: target, Log: logPath, Kind: backend}
 	if err := SaveShareState(st); err != nil {
-		return "", err
+		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
+		return "", fmt.Errorf("save share state: %w", err)
 	}
 	return tunnelURL, nil
 }
@@ -322,7 +322,8 @@ func startTunnel(key, target string, insecure bool) (string, error) {
 	}
 	st := &ShareState{Site: key, PID: cmd.Process.Pid, URL: tunnelURL, Target: target, Log: logPath}
 	if err := SaveShareState(st); err != nil {
-		return "", err
+		store.KillGroup(cmd.Process.Pid, syscall.SIGKILL)
+		return "", fmt.Errorf("save share state: %w", err)
 	}
 	return tunnelURL, nil
 }

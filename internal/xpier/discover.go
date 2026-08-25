@@ -1,9 +1,11 @@
 package xpier
 
 import (
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
 
@@ -19,7 +21,7 @@ func phpBinFor(version string) string {
 func phpCandidates(version string) []string {
 	return []string{
 		phpBinFor(version),
-		"/usr/local/bin/php" + version,
+		filepath.Join(store.BrewPrefix(), "bin", "php"+version),
 	}
 }
 
@@ -102,7 +104,7 @@ func constraintOk(constraint, installed string) bool {
 }
 
 func serviceRunning(name string) bool {
-	out, err := store.RunOut("brew", "services", "list")
+	out, err := service.BrewAsUser("services", "list")
 	if err != nil {
 		return false
 	}

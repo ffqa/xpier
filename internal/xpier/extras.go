@@ -62,7 +62,7 @@ func mailpitBin() string {
 	if p := filepath.Join(store.BrewPrefix(), "bin", "mailpit"); store.FileExists(p) {
 		return p
 	}
-	return "/usr/local/bin/mailpit"
+	return filepath.Join(store.BrewPrefix(), "bin", "mailpit")
 }
 
 func mailStatePath() string { return filepath.Join(store.XpierHome(), "servers", "mailpit.json") }

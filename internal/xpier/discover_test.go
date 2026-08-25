@@ -180,7 +180,9 @@ func TestNewCommandsDispatch(t *testing.T) {
 	os.Chdir(dir)
 	defer os.Chdir(old)
 	// Safe, read-only or temp-scoped commands must dispatch without error.
-	for _, cmd := range []string{"svc:available", "svc:versions", "env:init:fresh", "site:paths", "site:which", "php:list"} {
+	// php:list is excluded: it correctly errors when no brew PHP is installed,
+	// so it is not environment-independent (covered by its own service test).
+	for _, cmd := range []string{"svc:available", "svc:versions", "env:init:fresh", "site:paths", "site:which"} {
 		if err := Run(strings.Split(cmd, " ")); err != nil {
 			t.Errorf("Run(%q) = %v", cmd, err)
 		}

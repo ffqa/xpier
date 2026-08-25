@@ -244,6 +244,12 @@ func TestCurrentUser(t *testing.T) {
 
 func TestCmdServiceConfigMissing(t *testing.T) {
 	homeTemp(t)
+	// Without an editor configured, ShowConfig falls back to reading the file,
+	// which must error when the config is missing. With $VISUAL/$EDITOR set,
+	// an editor may open a non-existent path without erroring, so unset both
+	// to make this assertion deterministic.
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "")
 	if err := CmdService([]string{"nginx", "config"}); err == nil {
 		t.Error("nginx config with missing conf should error")
 	}
@@ -292,7 +298,28 @@ func TestFpmDownLiveButNotOurs(t *testing.T) {
 
 func TestCmdPhpList(t *testing.T) {
 	homeTemp(t)
+	// php:list reports an error when no brew PHP is installed; that is the
+	// correct product behavior, so the listing can only be exercised when
+	// at least one php@X.Y is present. Skip on environments without it.
+	if !anyBrewPhpInstalled() {
+		t.Skip("no brew php@* installed; skipping php:list listing test")
+	}
 	if err := CmdPhpList(nil); err != nil {
 		t.Fatalf("CmdPhpList = %v", err)
 	}
+}
+
+// anyBrewPhpInstalled reports whether the brew opt dir contains a php@X.Y
+// entry, so PHP-dependent tests can skip on bare CI runners.
+func anyBrewPhpInstalled() bool {
+	entries, err := os.ReadDir(filepath.Join(store.BrewPrefix(), "opt"))
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "php@") {
+			return true
+		}
+	}
+	return false
 }

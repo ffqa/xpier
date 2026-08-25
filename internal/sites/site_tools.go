@@ -228,7 +228,7 @@ func CmdSiteCoverage(args []string) error {
 }
 
 func CmdOpen(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier open [site]    open a site in the browser")
 		return nil
 	}
@@ -250,7 +250,7 @@ func CmdOpen(args []string) error {
 }
 
 func CmdEdit(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier edit [site]    open a site in your editor")
 		return nil
 	}
@@ -271,17 +271,34 @@ func CmdEdit(args []string) error {
 	if !ok {
 		return fmt.Errorf("site %s is not linked", name)
 	}
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		if store.FileExists("/usr/local/bin/code") {
-			editor = "/usr/local/bin/code"
-		} else if store.FileExists("/Applications/Visual Studio Code.app") {
-			editor = "open -a \"Visual Studio Code\""
-		} else {
-			return fmt.Errorf("no editor found; set $EDITOR")
+	editor, err := resolveEditor()
+	if err != nil {
+		return err
+	}
+	parts := strings.Fields(editor)
+	if len(parts) == 0 {
+		return fmt.Errorf("no editor found; set $EDITOR")
+	}
+	return exec.Command(parts[0], append(parts[1:], site.Path)...).Run()
+}
+
+// resolveEditor returns the editor command string to invoke, honoring VISUAL
+// then EDITOR (POSIX order). Falls back to `code` or VS Code via `open` so a
+// fresh machine without $EDITOR still works; field-splittable so a value like
+// `code -w` is supported.
+func resolveEditor() (string, error) {
+	for _, v := range []string{os.Getenv("VISUAL"), os.Getenv("EDITOR")} {
+		if v != "" {
+			return v, nil
 		}
 	}
-	return store.RunOutErr(editor, site.Path)
+	if p, err := exec.LookPath("code"); err == nil {
+		return p, nil
+	}
+	if store.FileExists("/Applications/Visual Studio Code.app") {
+		return `open -a "Visual Studio Code"`, nil
+	}
+	return "", fmt.Errorf("no editor found; set $VISUAL or $EDITOR")
 }
 
 func CmdSiteInformation(args []string) error {
@@ -336,17 +353,24 @@ func CmdTLD(args []string) error {
 		if err := store.WriteDnsmasqConfig(tld); err != nil {
 			return err
 		}
+		// Regenerate site configs against the new TLD BEFORE saving it, so a
+		// config-write failure cannot leave the TLD persisted while site
+		// configs still reference the old one (the half-applied state this
+		// command is meant to avoid).
+		oldTLD := sites.TLD
 		sites.TLD = tld
+		if err := nginx.WriteAllSiteConfigs(sites); err != nil {
+			sites.TLD = oldTLD
+			return err
+		}
 		if err := sites.Save(); err != nil {
+			sites.TLD = oldTLD
 			return err
 		}
 		// dnsmasq only reads its config at startup; kickstart applies the new
 		// wildcard immediately (requires sudoers launchctl or sudo).
 		if _, err := store.RunOut("sudo", "-n", "launchctl", "kickstart", "-k", "system/com.xpier.dnsmasq"); err != nil {
 			fmt.Println("[warn] dnsmasq not restarted (needs sudo): run `sudo xpier service dnsmasq restart` to apply DNS")
-		}
-		if err := nginx.WriteAllSiteConfigs(sites); err != nil {
-			return err
 		}
 		if err := nginx.NginxReload(); err != nil {
 			fmt.Printf("[warn] nginx reload failed: %v\n", err)
@@ -363,15 +387,11 @@ func CmdLoopback(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	// xpier binds every site to 127.0.0.1 only (see nginx site config); the
+	// loopback address is not configurable. Reject an argument instead of
+	// silently accepting and ignoring it.
 	if fs.NArg() > 0 {
-		lb := fs.Arg(0)
-		sites, err := store.LoadSites()
-		if err != nil {
-			return err
-		}
-		_ = lb
-		fmt.Println("loopback is fixed at 127.0.0.1 in xpier")
-		return sites.Save()
+		return fmt.Errorf("loopback is fixed at 127.0.0.1 in xpier and takes no arguments")
 	}
 	fmt.Println("127.0.0.1")
 	return nil

@@ -294,8 +294,10 @@ func TestCmdTLDAndLoopback(t *testing.T) {
 	if err := CmdLoopback(nil); err != nil {
 		t.Errorf("CmdLoopback get = %v", err)
 	}
-	if err := CmdLoopback([]string{"1.2.3.4"}); err != nil {
-		t.Errorf("CmdLoopback set = %v", err)
+	// loopback is fixed at 127.0.0.1 and takes no argument; an arg must error
+	// rather than be silently accepted and ignored.
+	if err := CmdLoopback([]string{"1.2.3.4"}); err == nil {
+		t.Error("CmdLoopback with an arg should error (loopback is fixed)")
 	}
 }
 

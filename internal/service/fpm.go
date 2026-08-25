@@ -26,10 +26,7 @@ func writeFpmState(ver string, pid int) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(FpmStatePath(ver)), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(FpmStatePath(ver), data, 0o644)
+	return store.WriteFileAtomic(FpmStatePath(ver), data, 0o644)
 }
 
 func FpmStatePath(ver string) string {

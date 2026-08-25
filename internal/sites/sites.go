@@ -344,15 +344,9 @@ func CmdWhichPHP(args []string) error {
 	return nil
 }
 
-// isHelpArg reports whether the first arg is a help flag (for commands
-// that parse args manually instead of via the flag package).
-func isHelpArg(args []string) bool {
-	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
-}
-
 // CmdUse pins the global default PHP version (`xpier use 8.3`).
 func CmdUse(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier use [8.3]    show / set the global default PHP version")
 		return nil
 	}
@@ -389,7 +383,7 @@ func phpBinForVer(ver string) string {
 
 // CmdUnsecure serves a site over plain http only (removes its 443 block).
 func CmdUnsecure(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier unsecure <site>    serve a site over http only")
 		return nil
 	}

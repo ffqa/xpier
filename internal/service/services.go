@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"xpier/internal/nginx"
 	"xpier/internal/share"
@@ -102,17 +104,25 @@ func StartDaemons() error {
 }
 
 // ShowConfig prints the path and opens the file in an editor when available,
-// otherwise prints the content.
+// otherwise prints the content. A missing config is reported as an error
+// rather than silently opening an empty editor buffer.
 func ShowConfig(path string) error {
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
 	fmt.Printf("config: %s\n", path)
-	editor := os.Getenv("EDITOR")
+	editor := os.Getenv("VISUAL")
 	if editor == "" {
-		if store.FileExists("/usr/local/bin/code") {
-			editor = "/usr/local/bin/code"
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		if p, err := exec.LookPath("code"); err == nil {
+			editor = p
 		}
 	}
 	if editor != "" {
-		return store.RunOutErr(editor, path)
+		parts := strings.Fields(editor)
+		return exec.Command(parts[0], append(parts[1:], path)...).Run()
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -279,17 +289,13 @@ func startSiteFpms() error {
 
 var knownServices = []string{"mysql", "mariadb", "redis", "postgresql@14", "postgresql@16", "mailpit", "cloudflared"}
 
-func isHelpArg(args []string) bool {
-	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
-}
-
 // CmdServicesAvailable lists the services xpier can install via brew and
 // whether each is already installed (Herd Pro's services:available).
 func CmdServicesAvailable(args []string) error {
 	fmt.Println("available services (brew):")
 	for _, svc := range knownServices {
 		status := "-"
-		if out, err := store.RunOut("brew", "list", "--versions", svc); err == nil && out != "" {
+		if out, err := BrewAsUser("list", "--versions", svc); err == nil && out != "" {
 			status = out
 		}
 		fmt.Printf("  %-16s %s\n", svc, status)
@@ -301,7 +307,7 @@ func CmdServicesAvailable(args []string) error {
 func CmdServicesVersions(args []string) error {
 	found := false
 	for _, svc := range knownServices {
-		if out, err := store.RunOut("brew", "list", "--versions", svc); err == nil && out != "" {
+		if out, err := BrewAsUser("list", "--versions", svc); err == nil && out != "" {
 			fmt.Printf("  %-16s %s\n", svc, out)
 			found = true
 		}
@@ -315,7 +321,7 @@ func CmdServicesVersions(args []string) error {
 // CmdServicesCreate installs a service via brew and starts it
 // (lightweight stand-in for Herd Pro's managed database services).
 func CmdServicesCreate(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier services:create <mysql|mariadb|redis|postgres|mailpit>")
 		return nil
 	}
@@ -336,11 +342,11 @@ func CmdServicesCreate(args []string) error {
 		fmt.Printf("%s already installed\n", formula)
 	} else {
 		fmt.Printf("installing %s via brew (progress below)...\n", formula)
-		if err := store.RunOutLiveYes("brew", "install", formula); err != nil {
+		if err := BrewAsUserLive("install", formula); err != nil {
 			return fmt.Errorf("brew install %s failed: %w (run it manually to see the full log)", formula, err)
 		}
 	}
-	if err := store.RunOutLiveYes("brew", "services", "start", formula); err != nil {
+	if err := BrewAsUserLive("services", "start", formula); err != nil {
 		return fmt.Errorf("brew services start %s: %w", formula, err)
 	}
 	fmt.Printf("%s installed and started\n", formula)
@@ -369,11 +375,11 @@ func CmdExtInstall(args []string) error {
 		fmt.Println("[warn] brew trust shivammathur/extensions: " + err.Error())
 	}
 	// Tap may already exist; failure is not fatal (brew install would tap it too).
-	if err := store.RunOutLiveYes("brew", "tap", "shivammathur/extensions"); err != nil {
+	if err := BrewAsUserLive("tap", "shivammathur/extensions"); err != nil {
 		fmt.Println("[warn] tap shivammathur/extensions: " + err.Error())
 	}
 	fmt.Printf("installing %s@%s via brew (progress below)...\n", ext, *ver)
-	if err := store.RunOutLiveYes("brew", "install", "shivammathur/extensions/"+ext+"@"+*ver); err != nil {
+	if err := BrewAsUserLive("install", "shivammathur/extensions/"+ext+"@"+*ver); err != nil {
 		return fmt.Errorf("brew install %s@%s failed: %w (run it manually to see the full log)", ext, *ver, err)
 	}
 	fmt.Printf("%s@%s installed (restart php-fpm to load it: `xpier service php-fpm-%s restart`)\n", ext, *ver, *ver)
@@ -382,7 +388,7 @@ func CmdExtInstall(args []string) error {
 
 // CmdPhpInstall installs a PHP version via brew (shivammathur tap).
 func CmdPhpInstall(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier php:install <8.2|8.3|...>    install a PHP version via brew")
 		return nil
 	}
@@ -397,7 +403,7 @@ func CmdPhpInstall(args []string) error {
 		fmt.Println("[warn] brew trust shivammathur/php: " + err.Error())
 	}
 	fmt.Printf("installing php@%s via brew (progress below)...\n", ver)
-	if err := store.RunOutLiveYes("brew", "install", "shivammathur/php/php@"+ver); err != nil {
+	if err := BrewAsUserLive("install", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew install php@%s failed: %w (run it manually to see the full log)", ver, err)
 	}
 	fmt.Printf("php@%s installed\n", ver)
@@ -407,7 +413,7 @@ func CmdPhpInstall(args []string) error {
 // CmdPhpUpdate upgrades an installed PHP version via brew (default: the
 // global default version).
 func CmdPhpUpdate(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier php:update [ver]    upgrade an installed PHP version")
 		return nil
 	}
@@ -422,7 +428,7 @@ func CmdPhpUpdate(args []string) error {
 		fmt.Println("[warn] brew trust shivammathur/php: " + err.Error())
 	}
 	fmt.Printf("upgrading php@%s via brew (progress below)...\n", ver)
-	if err := store.RunOutLiveYes("brew", "upgrade", "shivammathur/php/php@"+ver); err != nil {
+	if err := BrewAsUserLive("upgrade", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew upgrade php@%s failed: %w (run it manually to see the full log)", ver, err)
 	}
 	fmt.Printf("php@%s upgraded\n", ver)
@@ -448,7 +454,7 @@ func CmdPhpList(args []string) error {
 			continue
 		}
 		ver := strings.TrimPrefix(name, "php@")
-		if !isPhpVer(ver) {
+		if !store.SafePhpRe.MatchString(ver) {
 			continue
 		}
 		bin := filepath.Join(store.BrewPrefix(), "opt", name, "bin", "php")
@@ -487,33 +493,14 @@ func CmdPhpList(args []string) error {
 	return nil
 }
 
-func isPhpVer(v string) bool {
-	parts := strings.Split(v, ".")
-	if len(parts) != 2 {
-		return false
-	}
-	for _, p := range parts {
-		if p == "" {
-			return false
-		}
-		for _, r := range p {
-			if r < '0' || r > '9' {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 func comparePhpVer(a, b string) int {
 	pa, pb := strings.Split(a, "."), strings.Split(b, ".")
-	var x, y int
-	fmt.Sscanf(pa[0], "%d", &x)
-	fmt.Sscanf(pb[0], "%d", &y)
+	x, _ := strconv.Atoi(pa[0])
+	y, _ := strconv.Atoi(pb[0])
 	if x != y {
 		return x - y
 	}
-	fmt.Sscanf(pa[1], "%d", &x)
-	fmt.Sscanf(pb[1], "%d", &y)
+	x, _ = strconv.Atoi(pa[1])
+	y, _ = strconv.Atoi(pb[1])
 	return x - y
 }

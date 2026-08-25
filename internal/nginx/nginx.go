@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"xpier/internal/store"
 )
@@ -111,10 +112,10 @@ func compareVersionStrings(a, b string) int {
 	for i := 0; i < len(pa) || i < len(pb); i++ {
 		var x, y int
 		if i < len(pa) {
-			fmt.Sscanf(pa[i], "%d", &x)
+			x, _ = strconv.Atoi(pa[i])
 		}
 		if i < len(pb) {
-			fmt.Sscanf(pb[i], "%d", &y)
+			y, _ = strconv.Atoi(pb[i])
 		}
 		if x != y {
 			return x - y
