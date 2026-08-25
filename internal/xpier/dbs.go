@@ -297,6 +297,11 @@ func cmdDB(args []string) error {
 	db := ""
 	if fs.NArg() > 0 {
 		db = fs.Arg(0)
+		// db flows into the Adminer URL query string; validate it the same way
+		// db:create does so a stray arg (spaces, &, =) cannot inject params.
+		if !store.SafeSiteNameRe.MatchString(db) {
+			return fmt.Errorf("invalid database name %q (use [a-z0-9._-])", db)
+		}
 	}
 	return store.RunOutErr("open", adminerURL(store.SiteDomain(sites, name), db, detectMySQLServer()))
 }

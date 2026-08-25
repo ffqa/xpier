@@ -6,8 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"xpier/internal/nginx"
 	"xpier/internal/service"
@@ -218,14 +218,18 @@ func cmdNode(args []string) error {
 	if ver == "" {
 		return fmt.Errorf("site has no node pin; run `xpier node:isolate <version>`")
 	}
-	// nvm is a shell function; run through a login shell. Quote every
-	// passthrough arg so spaces/quotes are not re-parsed by the shell.
-	quoted := make([]string, 0, len(passthrough))
-	for _, a := range passthrough {
-		quoted = append(quoted, strconv.Quote(a))
+	// nvm is a shell function, so a login shell is required. But ver must not
+	// be interpolated into the script text (it comes from sites.json); validate
+	// it and pass ver + passthrough as positional args so the shell never
+	// re-parses them -- no quoting/escaping needed.
+	if !safeNodeVerRe.MatchString(ver) {
+		return fmt.Errorf("invalid node version pin %q (run `xpier node:isolate <version>`)", ver)
 	}
-	script := fmt.Sprintf("source \"$NVM_DIR/nvm.sh\" 2>/dev/null || source \"$HOME/.nvm/nvm.sh\" 2>/dev/null; nvm exec %s node %s", ver, strings.Join(quoted, " "))
-	cmd := exec.Command("bash", "-lc", script)
+	// $0 is a placeholder bash sets for $1..; "$1" is the version, "${@:2}" the
+	// user's node args. argv after the script are passed through verbatim.
+	script := `source "$NVM_DIR/nvm.sh" 2>/dev/null || source "$HOME/.nvm/nvm.sh" 2>/dev/null; exec nvm exec "$1" node "${@:2}"`
+	cmd := exec.Command("bash", "-lc", script, "xpier-node", ver)
+	cmd.Args = append(cmd.Args, passthrough...)
 	cmd.Dir = site.Path
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -235,6 +239,10 @@ func cmdNode(args []string) error {
 	}
 	return nil
 }
+
+// safeNodeVerRe guards the site.Node pin before it reaches bash as a
+// positional arg: digits, dots, slashes (lts/hydrogen) and dashes only.
+var safeNodeVerRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._/-]*$`)
 
 // cmdIni opens a PHP version's php.ini (Herd's `herd ini` equivalent).
 func cmdIni(args []string) error {

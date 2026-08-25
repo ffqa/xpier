@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"xpier/internal/service"
 	"xpier/internal/store"
 )
 
@@ -23,7 +24,10 @@ type planItem struct {
 	name    string
 	state   string // ok | missing
 	detail  string
-	command string
+	// argv is the arg-vector form of the install command (e.g. ["brew","install",svc]).
+	// Stored instead of a shell string so applyPlan never touches sh -c; the
+	// human-readable summary is rebuilt from it for the dry-run preview.
+	argv []string
 }
 
 func cmdSync(args []string) error {
@@ -45,8 +49,8 @@ func cmdSync(args []string) error {
 	pending := 0
 	for _, it := range items {
 		fmt.Printf("[%s] %-4s %-10s %s\n", it.state, it.kind, it.name, it.detail)
-		if it.command != "" {
-			fmt.Printf("       would run: %s\n", it.command)
+		if len(it.argv) > 0 {
+			fmt.Printf("       would run: %s\n", strings.Join(it.argv, " "))
 		}
 		if it.state != "ok" {
 			pending++
@@ -78,17 +82,17 @@ func plan(m *store.Manifest) []planItem {
 	phpOK := false
 	bin := phpBinFor(m.PHP)
 	if v := phpVersion(bin); v != "" {
-		items = append(items, planItem{"php", m.PHP, "ok", bin + " (" + v + ")", ""})
+		items = append(items, planItem{"php", m.PHP, "ok", bin + " (" + v + ")", nil})
 		phpOK = true
 	} else if out, err := store.RunOut("which", "php"); err == nil && out != "" && strings.HasPrefix(phpVersion(out), m.PHP+".") {
-		items = append(items, planItem{"php", m.PHP, "ok", "using " + out + " (" + phpVersion(out) + ")", ""})
+		items = append(items, planItem{"php", m.PHP, "ok", "using " + out + " (" + phpVersion(out) + ")", nil})
 		phpOK = true
 	} else {
-		cmd := "brew tap shivammathur/php && brew install shivammathur/php/php@" + m.PHP
-		if !store.SafePhpRe.MatchString(m.PHP) {
-			cmd = ""
+		var argv []string
+		if store.SafePhpRe.MatchString(m.PHP) {
+			argv = []string{"brew", "tap", "shivammathur/php", "&&", "brew", "install", "shivammathur/php/php@" + m.PHP}
 		}
-		items = append(items, planItem{"php", m.PHP, "missing", "php@" + m.PHP + " not found", cmd})
+		items = append(items, planItem{"php", m.PHP, "missing", "php@" + m.PHP + " not found", argv})
 	}
 	for _, ext := range store.SortedKeys(m.Extensions) {
 		it := planItem{kind: "ext", name: ext}
@@ -110,19 +114,19 @@ func plan(m *store.Manifest) []planItem {
 			it.state = "missing"
 			it.detail = "not loaded in php@" + m.PHP
 			if safeExtRe.MatchString(ext) && store.SafePhpRe.MatchString(m.PHP) {
-				it.command = "brew tap shivammathur/extensions && brew install shivammathur/extensions/" + ext + "@" + m.PHP
+				it.argv = []string{"brew", "tap", "shivammathur/extensions", "&&", "brew", "install", "shivammathur/extensions/" + ext + "@" + m.PHP}
 			}
 		}
 		items = append(items, it)
 	}
 	for _, svc := range m.Services {
 		it := planItem{kind: "svc", name: svc}
-		if out, err := store.RunOut("brew", "list", "--versions", svc); err != nil {
+		if out, err := service.BrewAsUser("list", "--versions", svc); err != nil {
 			it.state = "missing"
 			it.detail = "not installed via brew"
-			it.command = "brew install " + svc
-			if !safeSvcRe.MatchString(svc) {
-				it.command = ""
+			if safeSvcRe.MatchString(svc) {
+				it.argv = []string{"brew", "install", svc}
+			} else {
 				it.detail = "invalid service name"
 			}
 		} else {
@@ -136,21 +140,60 @@ func plan(m *store.Manifest) []planItem {
 
 func applyPlan(items []planItem) error {
 	for _, it := range items {
-		if it.state == "ok" || it.command == "" {
+		if it.state == "ok" || len(it.argv) == 0 {
 			continue
 		}
-		fmt.Println("-> " + it.command)
-		switch {
-		case strings.Contains(it.command, "shivammathur/extensions"):
+		fmt.Println("-> " + strings.Join(it.argv, " "))
+		// Re-trust the tap that the corresponding plan branch validated; safe
+		// Homebrew installs require a trusted tap up front.
+		switch it.kind {
+		case "ext":
 			store.BrewTrustTap("shivammathur/extensions")
-		case strings.Contains(it.command, "shivammathur/php"):
+		case "php":
 			store.BrewTrustTap("shivammathur/php")
 		}
-		if err := store.RunOutLiveYes("sh", "-c", it.command); err != nil {
-			return fmt.Errorf("%s failed: %w", it.command, err)
+		// argv may contain "&&" to chain steps (tap then install); run each
+		// sub-command directly via arg-vector, never through sh -c.
+		for _, sub := range splitChain(it.argv) {
+			if err := runLive(sub); err != nil {
+				return fmt.Errorf("%s failed: %w", strings.Join(sub, " "), err)
+			}
 		}
 	}
 	return nil
+}
+
+// runLive runs a planned sub-command with live output. brew is routed through
+// service.BrewAsUserLive so installs work under sudo (Homebrew refuses root);
+// any other command falls back to a direct live exec.
+func runLive(argv []string) error {
+	if len(argv) > 0 && argv[0] == "brew" {
+		return service.BrewAsUserLive(argv[1:]...)
+	}
+	return store.RunOutLiveYes(argv[0], argv[1:]...)
+}
+
+// splitChain splits an argv on a literal "&&" token into sub-commands, so a
+// plan item like ["brew","tap",X,"&&","brew","install",Y] becomes two
+// arg-vectors. Lets plan() express multi-step installs as one item without
+// applyPlan ever touching a shell.
+func splitChain(argv []string) [][]string {
+	var groups [][]string
+	cur := make([]string, 0, len(argv))
+	for _, a := range argv {
+		if a == "&&" {
+			if len(cur) > 0 {
+				groups = append(groups, cur)
+				cur = make([]string, 0, len(argv))
+			}
+			continue
+		}
+		cur = append(cur, a)
+	}
+	if len(cur) > 0 {
+		groups = append(groups, cur)
+	}
+	return groups
 }
 
 func writeLock(m *store.Manifest, lockPath string) error {

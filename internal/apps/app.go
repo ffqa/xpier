@@ -506,11 +506,15 @@ func appEnsureNode(req string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("node %s 未安装（提示：装好 nvm 后 xpier 会自动切换）", req)
 	}
-	if out, err := exec.Command("brew", "install", "nvm").CombinedOutput(); err != nil {
+	if out, err := service.BrewAsUser("install", "nvm"); err != nil {
 		return "", fmt.Errorf("brew install nvm: %v: %s", err, out)
 	}
+	// Use the sudo-aware prefix so the shell resolves the same Homebrew the
+	// install just used (root would otherwise hit Homebrew's root guard).
+	prefix, _ := service.BrewAsUser("--prefix", "nvm")
+	prefix = strings.TrimSpace(prefix)
 	out, err := exec.Command("bash", "-lc",
-		fmt.Sprintf("export NVM_DIR=\"$(brew --prefix nvm)\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; nvm install %s; echo nvm-done", req)).CombinedOutput()
+		fmt.Sprintf("export NVM_DIR=\"%s\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; nvm install %s; echo nvm-done", prefix, req)).CombinedOutput()
 	if err != nil && !strings.Contains(string(out), "nvm-done") {
 		return "", fmt.Errorf("nvm install %s 失败: %s", req, out)
 	}
@@ -532,7 +536,7 @@ func appEnsurePHP(ver string) error {
 	if !ok {
 		return fmt.Errorf("php@%s 未安装", ver)
 	}
-	if out, err := store.RunOutYes("brew", "install", "shivammathur/php/php@"+ver); err != nil {
+	if out, err := service.BrewAsUser("install", "shivammathur/php/php@"+ver); err != nil {
 		return fmt.Errorf("brew install php@%s: %v: %s", ver, err, out)
 	}
 	return nil
@@ -553,7 +557,7 @@ func appEnsureExtensions(ver string, exts []string) error {
 			return fmt.Errorf("扩展 %s 未安装", ext)
 		}
 		store.BrewTrustTap("shivammathur/extensions")
-		if out, err := store.RunOutYes("brew", "install", "shivammathur/extensions/"+ext+"@"+ver); err != nil {
+		if out, err := service.BrewAsUser("install", "shivammathur/extensions/"+ext+"@"+ver); err != nil {
 			return fmt.Errorf("brew install %s@%s: %v: %s", ext, ver, err, out)
 		}
 	}
@@ -1090,9 +1094,6 @@ func tailFile(path string, follow bool, prefix string) error {
 }
 
 // parseLogFlags extracts -f/--follow, leaving the rest untouched.
-func isHelpArg(args []string) bool {
-	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
-}
 
 func parseLogFlags(args []string) (follow bool, rest []string) {
 	for _, a := range args {
@@ -1107,7 +1108,7 @@ func parseLogFlags(args []string) (follow bool, rest []string) {
 
 // CmdLog tails a single built-in service log (global, no project needed).
 func CmdLog(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier log <nginx|dnsmasq|php-fpm|mailpit> [-f]")
 		return nil
 	}
@@ -1125,7 +1126,7 @@ func CmdLog(args []string) error {
 
 // CmdAppLog tails one running app's log in the current project directory.
 func CmdAppLog(args []string) error {
-	if isHelpArg(args) {
+	if store.IsHelpArg(args) {
 		fmt.Println("usage: xpier app:log <app> [-f]")
 		return nil
 	}
