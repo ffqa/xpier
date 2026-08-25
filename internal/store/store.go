@@ -187,8 +187,41 @@ func FileExists(path string) bool {
 	return err == nil
 }
 
+// brewCmd builds a brew command that runs as the real (non-root) user when
+// the current process is root (Homebrew refuses root), and as the current
+// process otherwise. The sudo-user resolution mirrors CurrentUser.
+func brewCmd(args ...string) *exec.Cmd {
+	if sudoUser := os.Getenv("SUDO_USER"); sudoUser != "" && os.Geteuid() == 0 {
+		args = append([]string{"-u", sudoUser, "-H", "brew"}, args...)
+		return exec.Command("sudo", args...)
+	}
+	return exec.Command("brew", args...)
+}
+
+// BrewRun runs brew capturing combined output, sudo-aware (Homebrew refuses
+// root). Returns the output string.
+func BrewRun(args ...string) (string, error) {
+	out, err := brewCmd(args...).CombinedOutput()
+	return string(out), err
+}
+
+// BrewLiveYes runs brew with stdout/stderr streamed live and a pre-answered
+// "y" stdin for brew confirmation prompts, sudo-aware.
+func BrewLiveYes(args ...string) error {
+	cmd := brewCmd(args...)
+	r, w, _ := os.Pipe()
+	w.WriteString("y\n")
+	w.Close()
+	cmd.Stdin = r
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	r.Close()
+	return err
+}
+
 func BrewPrefix() string {
-	out, err := exec.Command("brew", "--prefix").Output()
+	out, err := brewCmd("--prefix").Output()
 	if err != nil {
 		return "/usr/local"
 	}
@@ -404,7 +437,7 @@ func EnsureBrewPackage(bin, formula, display string) error {
 		return fmt.Errorf("%s not installed; run `brew install %s` and retry", display, formula)
 	}
 	fmt.Printf("installing %s...\n", formula)
-	if out, err := exec.Command("brew", "install", formula).CombinedOutput(); err != nil {
+	if out, err := BrewRun("install", formula); err != nil {
 		return fmt.Errorf("brew install %s: %v: %s", formula, err, out)
 	}
 	return nil
@@ -440,6 +473,12 @@ func SiteRoot(site Site) string {
 	return site.Path
 }
 
+// IsHelpArg reports whether the first arg is a help flag (-h/--help), for
+// commands that parse args manually instead of via the flag package.
+func IsHelpArg(args []string) bool {
+	return len(args) > 0 && (args[0] == "-h" || args[0] == "--help")
+}
+
 var SafeSiteNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
 var SafePhpRe = regexp.MustCompile(`^\d+\.\d+$`)
@@ -448,7 +487,7 @@ var SafePhpRe = regexp.MustCompile(`^\d+\.\d+$`)
 // security model refuses untrusted tap formulae). No-op on brew versions
 // that predate the trust command.
 func BrewTrustTap(tap string) error {
-	err := RunOutLive("brew", "trust", tap)
+	err := BrewLiveYes("trust", tap)
 	if err != nil && strings.Contains(err.Error(), "Unknown command") {
 		return nil
 	}
@@ -568,6 +607,13 @@ func Paint(s string) string {
 		return s
 	}
 	return paintWord(s)
+}
+
+// WriteFileAtomic writes data to path via a temp file + rename so a crash
+// mid-write never leaves a truncated registry behind. Exported so state
+// files outside the store package (fpm, share) get the same durability.
+func WriteFileAtomic(path string, data []byte, perm os.FileMode) error {
+	return writeFileAtomic(path, data, perm)
 }
 
 // writeFileAtomic writes data to path via a temp file + rename so a crash
