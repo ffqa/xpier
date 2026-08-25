@@ -34,7 +34,10 @@ func EnsureCA() error {
 	if err != nil {
 		return fmt.Errorf("openssl CA: %v: %s", err, out)
 	}
-	return nil
+	// Enforce 0o600 on the CA private key: openssl honors the process umask, so
+	// under a loose umask the key could be world-readable once ChownHerdyHomeToUser
+	// hands ~/.xpier back to the user -- anyone local could then mint trusted certs.
+	return os.Chmod(key, 0o600)
 }
 
 // TrustCA installs the CA into the system keychain (requires root).
@@ -82,6 +85,9 @@ func EnsureWildcardCertSignedByCA(tld string) error {
 		"-keyout", key, "-out", csr,
 		"-subj", "/CN=*."+tld,
 		"-addext", "subjectAltName=DNS:*."+tld+",DNS:"+tld+",DNS:localhost"); err != nil {
+		return err
+	}
+	if err := os.Chmod(key, 0o600); err != nil {
 		return err
 	}
 	// Sign with the CA; SANs go through an extfile.
@@ -138,6 +144,9 @@ func EnsureDomainCert(domain string) error {
 	}
 	if err := run("req", "-newkey", "rsa:2048", "-nodes",
 		"-keyout", key, "-out", csr, "-subj", "/CN="+domain); err != nil {
+		return err
+	}
+	if err := os.Chmod(key, 0o600); err != nil {
 		return err
 	}
 	if err := run("x509", "-req", "-in", csr, "-CA", caCert, "-CAkey", caKey,

@@ -27,7 +27,8 @@ func EnsureWildcardCert(tld string) error {
 	if err != nil {
 		return fmt.Errorf("openssl: %v: %s", err, out)
 	}
-	return nil
+	// Restrict the wildcard private key (see EnsureCA for rationale).
+	return os.Chmod(key, 0o600)
 }
 
 func LaunchdDir() string { return "/Library/LaunchDaemons" }
@@ -95,7 +96,29 @@ func EnsureNginxSudoers() error {
 	confPath := filepath.Join(nginx.NginxHome(), "nginx.conf")
 	content := fmt.Sprintf("%s ALL=(root) NOPASSWD: %s -s reload -c %s\n%s ALL=(root) NOPASSWD: %s -t -c %s\n",
 		u.Username, nginx.NginxBin(), confPath, u.Username, nginx.NginxBin(), confPath)
-	return os.WriteFile("/etc/sudoers.d/xpier", []byte(content), 0o440)
+	// Atomic write (temp + rename): a half-written sudoers fragment can break
+	// sudo system-wide, so never truncate the live file in place.
+	const sudoersPath = "/etc/sudoers.d/xpier"
+	if err := os.MkdirAll(filepath.Dir(sudoersPath), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(sudoersPath), ".xpier-sudoers-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write([]byte(content)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0o440); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), sudoersPath)
 }
 
 func LaunchctlBootstrap(label, plistPath string) error {

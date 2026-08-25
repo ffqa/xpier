@@ -3,7 +3,6 @@ package service
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -13,13 +12,13 @@ import (
 
 // BrewAsUser runs brew as the real user: Homebrew refuses to run as root.
 func BrewAsUser(args ...string) (string, error) {
-	u := os.Getenv("SUDO_USER")
-	if u == "" {
-		u = os.Getenv("USER")
-	}
-	cmd := exec.Command("sudo", append([]string{"-u", u, "-H", "brew"}, args...)...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	return store.BrewRun(args...)
+}
+
+// BrewAsUserLive is BrewAsUser with stdout/stderr streamed live so long
+// installs (brew install php@8.4) show progress instead of buffering.
+func BrewAsUserLive(args ...string) error {
+	return store.BrewLiveYes(args...)
 }
 
 func CmdInstall(args []string) error {
@@ -68,6 +67,15 @@ func CmdInstall(args []string) error {
 	}
 	if err := ChownHerdyHomeToUser(); err != nil {
 		return err
+	}
+	// The passwordless sudoers entry reloads nginx via `nginx -s reload -c
+	// <nginx.conf>` as root; nginx reads the `pid` directive from that conf to
+	// decide which process to signal. Keep the main conf root-owned (read-only
+	// to the user) so a user cannot redirect `pid` at an arbitrary process and
+	// have root signal it. conf.d/*.conf stays user-writable for link/proxy;
+	// server{} blocks cannot override the pid directive.
+	if err := protectMainNginxConfig(); err != nil {
+		return fmt.Errorf("protect nginx.conf: %w", err)
 	}
 	fmt.Println("configs written, installing launchd daemons...")
 	nginxPlist := filepath.Join(LaunchdDir(), "com.xpier.nginx.plist")
@@ -165,6 +173,10 @@ func firstNonHeaderLine(out string) string {
 // ChownHerdyHomeToUser returns ownership of ~/.xpier files to the real user:
 // configs written during `sudo xpier install` would otherwise be root-owned
 // and uneditable by the user (nginx.conf, dnsmasq.conf, ...).
+//
+// Uses Lchown (not Chown) so a symlink planted inside ~/.xpier never causes
+// chown of its target -- Chown follows links and would let a root walk alter
+// an unrelated root-owned file (e.g. /etc/sudoers) when this runs as root.
 func ChownHerdyHomeToUser() error {
 	u, err := store.CurrentUser()
 	if err != nil {
@@ -182,6 +194,17 @@ func ChownHerdyHomeToUser() error {
 		if err != nil {
 			return nil
 		}
-		return os.Chown(path, uid, gid)
+		return os.Lchown(path, uid, gid)
 	})
+}
+
+// protectMainNginxConfig reasserts root:root 0644 on the main nginx.conf after
+// ChownHerdyHomeToUser has handed ownership back to the user. See CmdInstall
+// for why the conf that controls the `pid` directive must stay non-writable.
+func protectMainNginxConfig() error {
+	conf := filepath.Join(nginx.NginxHome(), "nginx.conf")
+	if err := os.Chown(conf, 0, 0); err != nil {
+		return err
+	}
+	return os.Chmod(conf, 0o644)
 }
