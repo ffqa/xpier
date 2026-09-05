@@ -215,6 +215,46 @@ func killAppPortHolders(ports []string, pgid int) {
 	}
 }
 
+// killOrphanHolders kills port holders whose pgid leader is dead (orphaned
+// workers, e.g. hyperf watcher forks with PPID=1 after the group leader
+// exits). When the tracked pid is already dead we also fall back to killing
+// any remaining holder to unblock a restart, otherwise we keep the pgid guard.
+func killOrphanHolders(ports []string, trackedPGID int) {
+	holders := portHolderPids(ports)
+	if len(holders) == 0 {
+		return
+	}
+	trackedAlive := store.PidAlive(trackedPGID)
+	var toKill []int
+	for _, pid := range holders {
+		pgid := procGroupOf(pid)
+		if pgid == trackedPGID {
+			toKill = append(toKill, pid)
+		} else if pgid != 0 && !store.PidAlive(pgid) {
+			toKill = append(toKill, pid)
+		} else if pgid == 0 {
+			toKill = append(toKill, pid)
+		} else if !trackedAlive {
+			// Tracked app is dead but holder lives in another live group
+			// (e.g. state pid recycled, orphan with new pgid). The port is
+			// still blocked for the declared app, so reclaim it.
+			toKill = append(toKill, pid)
+		}
+	}
+	killAppPids(toKill)
+}
+
+func waitPortsFree(ports []string, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if !anyAppPortBusy(ports) {
+			return true
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return !anyAppPortBusy(ports)
+}
+
 func appNginxConfPath(ns, name string) string {
 	return filepath.Join(nginx.NginxConfDir(), "dev-"+ns+"-"+name+".conf")
 }
@@ -364,8 +404,20 @@ func appUp(ns string, name string, app store.App) error {
 		return nil
 	}
 	known := appPorts(app, &store.AppState{})
-	if anyAppPortBusy(known) {
-		return fmt.Errorf("%s port(s) %s already in use", name, strings.Join(known, ","))
+	if len(known) > 0 && anyAppPortBusy(known) {
+		// Stale holders (orphaned hyperf workers with PPID=1, dead pgid leader,
+		// or lost state file) block restarts. Reclaim before reporting busy.
+		if pids := strayAppPids(ns, app.Cmd); len(pids) > 0 {
+			killAppPids(pids)
+			waitPortsFree(known, 800*time.Millisecond)
+		}
+		if anyAppPortBusy(known) {
+			killOrphanHolders(known, 0)
+			waitPortsFree(known, 800*time.Millisecond)
+		}
+		if anyAppPortBusy(known) {
+			return fmt.Errorf("%s port(s) %s already in use", name, strings.Join(known, ","))
+		}
 	}
 	prepend, err := ensureAppPrereqs(app)
 	if err != nil {
@@ -434,6 +486,22 @@ func appUp(ns string, name string, app store.App) error {
 func appDown(ns string, name string, app store.App) {
 	s, err := store.LoadAppState(ns, name)
 	if err != nil {
+		// No tracked state (lost after crash/reboot) but ports may still be
+		// held by orphaned workers. Reclaim declared ports so restart can proceed.
+		known := appPorts(app, &store.AppState{})
+		if len(known) > 0 && anyAppPortBusy(known) {
+			if pids := strayAppPids(ns, app.Cmd); len(pids) > 0 {
+				killAppPids(pids)
+				waitPortsFree(known, 800*time.Millisecond)
+			}
+			if anyAppPortBusy(known) {
+				killOrphanHolders(known, 0)
+				waitPortsFree(known, 800*time.Millisecond)
+			}
+			if !anyAppPortBusy(known) {
+				fmt.Printf("  %s stopped (cleaned orphan holders)\n", name)
+			}
+		}
 		return
 	}
 	all := appPorts(app, s)
@@ -448,6 +516,16 @@ func appDown(ns string, name string, app store.App) {
 		}
 	}
 	killAppPortHolders(all, s.PID)
+	if anyAppPortBusy(all) {
+		if pids := strayAppPids(ns, app.Cmd); len(pids) > 0 {
+			killAppPids(pids)
+			waitPortsFree(all, 500*time.Millisecond)
+		}
+		if anyAppPortBusy(all) {
+			killOrphanHolders(all, s.PID)
+			waitPortsFree(all, 800*time.Millisecond)
+		}
+	}
 	os.Remove(store.AppStatePath(ns, name))
 	removeAppNginxConf(ns, name)
 	fmt.Printf("  %s stopped\n", name)
